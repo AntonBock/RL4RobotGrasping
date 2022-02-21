@@ -5,7 +5,7 @@ physics_engine: ${..physics_engine}
 
 # if given, will override the device setting in gym. 
 env:
-  numEnvs: ${resolve_default:16,${...num_envs}}
+  numEnvs: ${resolve_default:4096,${...num_envs}}
   envSpacing: 1.5
   episodeLength: 500
   enableDebugVis: False
@@ -16,7 +16,7 @@ env:
   startPositionNoise: 0.0
   startRotationNoise: 0.0
 
-  numProps: 16
+  numProps: 1
   aggregateMode: 3
 
   actionScale: 7.5
@@ -25,16 +25,15 @@ env:
   rotRewardScale: 0.5
   aroundHandleRewardScale: 0.25
   openRewardScale: 7.5
-  fingerDistRewardScale: 5.0
+  fingerDistRewardScale: 4.0
   actionPenaltyScale: 0.01
 
   asset:
     assetRoot: "../../assets"
     assetFileNameFranka: "urdf/franka_description/robots/franka_panda.urdf"
-    assetFileNameCabinet: "urdf/sektion_cabinet_model/urdf/sektion_cabinet_2.urdf"
 
   # set to True if you use camera sensors in the environment
-  enableCameraSensors: True
+  enableCameraSensors: False
 
 sim:
   dt: 0.0166 # 1/60
