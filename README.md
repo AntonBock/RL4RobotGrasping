@@ -1,5 +1,8 @@
 # RL4RobotGrasping
 
+# Demo directory
+Find media files [here](https://drive.google.com/drive/folders/1iZSdf_ES50ebloyL4NZgCL3jxnOBp3L2?usp=sharing)
+
 # Install
 
 ## Prerequisites 
