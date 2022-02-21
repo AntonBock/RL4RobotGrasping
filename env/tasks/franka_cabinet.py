@@ -38,7 +38,7 @@ from tasks.base.vec_task import VecTask
 class FrankaCabinet(VecTask):
 
     def __init__(self, cfg, sim_device, graphics_device_id, headless):
-        print("Running __init__")
+        # print("Running __init__")
         self.cfg = cfg
 
         self.max_episode_length = self.cfg["env"]["episodeLength"]
@@ -113,9 +113,9 @@ class FrankaCabinet(VecTask):
         self.franka_dof_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
 
         self.global_indices = torch.arange(self.num_envs * (1 + self.num_props), dtype=torch.int32, device=self.device).view(self.num_envs, -1)
-        print("Finished __init__")
+        # print("Finished __init__")
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
-        print("Finished __init__2")
+        # print("Finished __init__2")
 
     def create_sim(self):
         print("Creating sim")
@@ -450,7 +450,7 @@ class FrankaCabinet(VecTask):
         return self.obs_buf
 
     def reset_idx(self, env_ids):
-        print("Running reset_idx")
+        # print("Running reset_idx")
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
         
@@ -484,7 +484,7 @@ class FrankaCabinet(VecTask):
         
         self.progress_buf[env_ids] = 0
         self.reset_buf[env_ids] = 0
-        print("Finished reset_idx")
+        # print("Finished reset_idx")
 
     def pre_physics_step(self, actions):
         # print("Pre_physx")
@@ -551,7 +551,7 @@ class FrankaCabinet(VecTask):
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], px[0], px[1], px[2]], [1, 0, 0])
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], py[0], py[1], py[2]], [0, 1, 0])
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], pz[0], pz[1], pz[2]], [0, 0, 1])
-    print("Finished post physx")
+    # print("Finished post physx")
 
 #####################################################################
 ###=========================jit functions=========================###
