@@ -2,7 +2,7 @@
 
 # Demo directory
 Find media files [here](https://drive.google.com/drive/folders/1iZSdf_ES50ebloyL4NZgCL3jxnOBp3L2?usp=sharing).
-![Test image](https://drive.google.com/file/d/1OIIzV4LE0Yz3Hksk33Vm7I7T89dGHUN1/view?usp=sharing)
+
 
 # Install
 
