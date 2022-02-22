@@ -21,10 +21,10 @@ env:
 
   actionScale: 7.5
   dofVelocityScale: 0.1
-  distRewardScale: 2.0
+  distRewardScale: 0.5 # 2.0
   rotRewardScale: 0.5
   aroundHandleRewardScale: 0.25
-  openRewardScale: 7.5
+  heightRewardScale: 50 #7.5
   fingerDistRewardScale: 4.0
   actionPenaltyScale: 0.01
 

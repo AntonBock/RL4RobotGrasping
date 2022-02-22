@@ -41,7 +41,7 @@ class FrankaCabinet(VecTask):
         # print("Running __init__")
         self.cfg = cfg
 
-        self.max_episode_length = self.cfg["env"]["episodeLength"]
+        self.max_episode_length = 100 # self.cfg["env"]["episodeLength"]
 
         self.action_scale = self.cfg["env"]["actionScale"]
         self.start_position_noise = self.cfg["env"]["startPositionNoise"]
@@ -53,7 +53,7 @@ class FrankaCabinet(VecTask):
         self.dist_reward_scale = self.cfg["env"]["distRewardScale"]
         self.rot_reward_scale = self.cfg["env"]["rotRewardScale"]
         self.around_handle_reward_scale = self.cfg["env"]["aroundHandleRewardScale"]
-        self.open_reward_scale = self.cfg["env"]["openRewardScale"]
+        self.open_height_scale = self.cfg["env"]["heightRewardScale"]
         self.finger_dist_reward_scale = self.cfg["env"]["fingerDistRewardScale"]
         self.action_penalty_scale = self.cfg["env"]["actionPenaltyScale"]
 
@@ -107,7 +107,7 @@ class FrankaCabinet(VecTask):
         self.root_state_tensor = gymtorch.wrap_tensor(actor_root_state_tensor).view(self.num_envs, -1, 13)
 
         if self.num_props > 0:
-            self.prop_states = self.root_state_tensor[:, 2:]
+            self.prop_states = self.root_state_tensor[:, 1:]
 
         self.num_dofs = self.gym.get_sim_dof_count(self.sim) // self.num_envs
         self.franka_dof_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
@@ -277,6 +277,10 @@ class FrankaCabinet(VecTask):
                 #drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
                 #drawer_pose = self.gym.get_rigid_transform(env_ptr, drawer_handle)
 
+                # hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
+                # hand_pose = self.gym.get_rigid_transform(env_ptr, hand_handle)
+
+
                 props_per_row = int(np.ceil(np.sqrt(self.num_props)))
                 xmin = -0.5 * self.prop_spacing * (props_per_row - 1)
                 yzmin = -0.5 * self.prop_spacing * (props_per_row - 1)
@@ -289,10 +293,24 @@ class FrankaCabinet(VecTask):
                             break
                         # propx = xmin + k * self.prop_spacing
                         prop_state_pose = gymapi.Transform()
+
+                        # # Correct
                         prop_state_pose.p.x = 0.50 # drawer_pose.p.x + propx
                         # propz, propy = 0, prop_up
                         prop_state_pose.p.y = 0 #drawer_pose.p.y + propy
                         prop_state_pose.p.z = 0.1 # drawer_pose.p.z + propz
+
+                        # # Test
+                        # prop_state_pose.p.x = hand_pose.p.x
+                        # propz, propy = 0, prop_up
+                        # prop_state_pose.p.y = hand_pose.p.y
+                        # prop_state_pose.p.z = hand_pose.p.z
+                        # prop_state_pose.r.x = hand_pose.r.x
+                        # prop_state_pose.r.y = hand_pose.r.y
+                        # prop_state_pose.r.z = hand_pose.r.z
+                        # prop_state_pose.r.w = hand_pose.r.w
+
+
                         prop_state_pose.r = gymapi.Quat(0, 0, 0, 1)
                         prop_actor = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         prop_count += 1
@@ -362,7 +380,7 @@ class FrankaCabinet(VecTask):
                                                 prop_local_grasp_pose.p.z], device=self.device).repeat((self.num_envs, 1))
         self.prop_local_grasp_rot = to_torch([prop_local_grasp_pose.r.x, prop_local_grasp_pose.r.y,
                                                 prop_local_grasp_pose.r.z, prop_local_grasp_pose.r.w], device=self.device).repeat((self.num_envs, 1))
-
+        
 
         # Unknown
         self.gripper_forward_axis = to_torch([0, 0, 1], device=self.device).repeat((self.num_envs, 1))
@@ -445,7 +463,7 @@ class FrankaCabinet(VecTask):
         to_target = self.prop_grasp_pos - self.franka_grasp_pos # Distance to target
         self.obs_buf = torch.cat((dof_pos_scaled, self.franka_dof_vel * self.dof_vel_scale, to_target, self.prop_grasp_pos[:, 2].unsqueeze(-1)), dim=-1) #self.prop_dof_vel[:, 3].unsqueeze(-1)),
 
-        
+        # print("Box position: ", prop_pos)
         # print("Finished computing observations")
         return self.obs_buf
 
@@ -469,6 +487,8 @@ class FrankaCabinet(VecTask):
         if self.num_props > 0:
             prop_indices = self.global_indices[env_ids, 1:].flatten()
             self.prop_states[env_ids] = self.default_prop_states[env_ids]
+            # print("Prop pos: ", self.default_prop_states[env_ids])
+
             self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                          gymtorch.unwrap_tensor(self.root_state_tensor),
                                                          gymtorch.unwrap_tensor(prop_indices), len(prop_indices))
@@ -575,15 +595,15 @@ def compute_franka_reward(
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.02, dist_reward * 2, dist_reward)
 
-    axis1 = tf_vector(franka_grasp_rot, gripper_forward_axis)
-    axis2 = tf_vector(prop_grasp_rot, prop_inward_axis)
-    axis3 = tf_vector(franka_grasp_rot, gripper_up_axis)
-    axis4 = tf_vector(prop_grasp_rot, prop_up_axis)
+    # axis1 = tf_vector(franka_grasp_rot, gripper_forward_axis)
+    # axis2 = tf_vector(prop_grasp_rot, prop_inward_axis)
+    # axis3 = tf_vector(franka_grasp_rot, gripper_up_axis)
+    # axis4 = tf_vector(prop_grasp_rot, prop_up_axis)
 
-    dot1 = torch.bmm(axis1.view(num_envs, 1, 3), axis2.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # alignment of forward axis for gripper
-    dot2 = torch.bmm(axis3.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # alignment of up axis for gripper
+    # dot1 = torch.bmm(axis1.view(num_envs, 1, 3), axis2.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # alignment of forward axis for gripper
+    # dot2 = torch.bmm(axis3.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # alignment of up axis for gripper
     # reward for matching the orientation of the hand to the drawer (fingers wrapped)
-    rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 + torch.sign(dot2) * dot2 ** 2)
+    # rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 + torch.sign(dot2) * dot2 ** 2)
 
     # # bonus if left finger is above the drawer handle and right below
     # around_handle_reward = torch.zeros_like(rot_reward)
@@ -591,7 +611,7 @@ def compute_franka_reward(
     #                                    torch.where(franka_rfinger_pos[:, 2] < prop_grasp_pos[:, 2],
     #                                                around_handle_reward + 0.5, around_handle_reward), around_handle_reward)
     # reward for distance of each finger from the drawer
-    finger_dist_reward = torch.zeros_like(rot_reward)
+    # finger_dist_reward = torch.zeros_like(rot_reward)
     lfinger_dist = torch.cdist(franka_lfinger_pos, prop_grasp_pos, 2.0)[:,0]
     rfinger_dist = torch.cdist(franka_rfinger_pos, prop_grasp_pos, 2.0)[:,0]
     # finger_dist_reward = 3-lfinger_dist
@@ -607,7 +627,8 @@ def compute_franka_reward(
     # open_reward = cabinet_dof_pos[:, 3] * around_handle_reward + cabinet_dof_pos[:, 3]  # drawer_top_joint
 
     # How high the box has been lifted
-    open_reward = prop_grasp_pos[:, 2]  # drawer_top_joint
+    
+    height_reward = torch.where(prop_grasp_pos[:, 2]>0.08, height_reward=5, height_reward=0)  # drawer_top_joint
 
     # OLD
     # rewards = dist_reward_scale * dist_reward + rot_reward_scale * rot_reward \
@@ -616,7 +637,7 @@ def compute_franka_reward(
 
     # print("Penalty: ", action_penalty_scale * action_penalty)
 
-    rewards = dist_reward_scale * dist_reward - action_penalty_scale * action_penalty # finger_dist_reward_scale * rfinger_dist + open_reward_scale * open_reward + 
+    rewards =  height_reward_scale * height_reward + dist_reward_scale * dist_reward - finger_dist_reward_scale * lfinger_dist - finger_dist_reward_scale * rfinger_dist - action_penalty_scale * action_penalty
 
     # # bonus for opening drawer properly
     # rewards = torch.where(cabinet_dof_pos[:, 3] > 0.01, rewards + 0.5, rewards)

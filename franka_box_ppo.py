@@ -76,8 +76,6 @@ memory = RandomMemory(memory_size=16, num_envs=env.num_envs, device=device)
 if tt:
     networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
                 "value": Value(env.observation_space, env.action_space, device)}
-  
-
 else:
     networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
                 "value": None}
@@ -85,7 +83,7 @@ else:
 
 
 if checkpoint:
-    networks_ppo["policy"].load("./runs/22-02-21_08-26-43-894248_PPO/checkpoints/100000_policy.pt") 
+    networks_ppo["policy"].load("./runs/22-02-21_15-13-33-987794_PPO/checkpoints/483000_policy.pt") 
 else:
     # Initialize the models' parameters (weights and biases) using a Gaussian distribution
     for network in networks_ppo.values():
