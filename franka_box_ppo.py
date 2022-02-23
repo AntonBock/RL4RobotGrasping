@@ -83,7 +83,7 @@ else:
 
 
 if checkpoint:
-    networks_ppo["policy"].load("./runs/22-02-21_15-13-33-987794_PPO/checkpoints/483000_policy.pt") 
+    networks_ppo["policy"].load("./runs/million/checkpoints/1000000_policy.pt") 
 else:
     # Initialize the models' parameters (weights and biases) using a Gaussian distribution
     for network in networks_ppo.values():
@@ -103,8 +103,8 @@ cfg_ppo["learning_epochs"] = 8
 cfg_ppo["grad_norm_clip"] = 0.5
 cfg_ppo["value_loss_scale"] = 2.0
 # logging to TensorBoard and write checkpoints each 16 and 1000 timesteps respectively
-cfg_ppo["experiment"]["write_interval"] = 16
-cfg_ppo["experiment"]["checkpoint_interval"] = 1000
+cfg_ppo["experiment"]["write_interval"] = 50
+cfg_ppo["experiment"]["checkpoint_interval"] = 2000
 cfg_ppo["policy_learning_rate"] = 5e-4   # policy learning rate
 cfg_ppo["value_learning_rate"] = 5e-4
 
@@ -125,7 +125,7 @@ else:
             device=device)
 
 # Configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 500000, "headless": True}
+cfg_trainer = {"timesteps": 1000000, "headless": True}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
 # start training
