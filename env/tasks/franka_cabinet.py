@@ -638,12 +638,7 @@ def compute_franka_reward(
     # open_reward = cabinet_dof_pos[:, 3] * around_handle_reward + cabinet_dof_pos[:, 3]  # drawer_top_joint
 
     # How high the box has been lifted
-<<<<<<< Updated upstream
-    
-    height_reward = torch.where(prop_grasp_pos[:, 2] > 0.08, 5, 0)  # drawer_top_joint
-=======
     height_reward = torch.where(prop_grasp_pos[:, 2]>6, 5, 0) * height_reward_scale  # drawer_top_joint
->>>>>>> Stashed changes
 
     # OLD
     # rewards = dist_reward_scale * dist_reward + rot_reward_scale * rot_reward \
