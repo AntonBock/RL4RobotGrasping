@@ -29,7 +29,6 @@
 import numpy as np
 import os
 import torch
-import random
 
 from isaacgym import gymutil, gymtorch, gymapi
 from isaacgym.torch_utils import *
@@ -58,9 +57,8 @@ class FrankaCabinet(VecTask):
         self.finger_dist_reward_scale = self.cfg["env"]["fingerDistRewardScale"]
         self.action_penalty_scale = self.cfg["env"]["actionPenaltyScale"]
 
-        self.enRand = self.cfg["env"]["enableRand"]
-
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
+        self.enRand = self.cfg["env"]["enableRand"]
 
         self.up_axis = "z"
         self.up_axis_idx = 2
@@ -71,10 +69,10 @@ class FrankaCabinet(VecTask):
         
 
         # prop dimensions
-        self.prop_width = 0.05
-        self.prop_height = 0.05
-        self.prop_length = 0.05
-        self.prop_spacing = 0.06
+        self.prop_width = 0.08
+        self.prop_height = 0.08
+        self.prop_length = 0.08
+        self.prop_spacing = 0.09
 
         num_obs = 22
         num_acts = 9
@@ -139,7 +137,6 @@ class FrankaCabinet(VecTask):
         plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
         self.gym.add_ground(self.sim, plane_params)
         print("Finished creating ground plane")
-    
 
 
     def _create_envs(self, num_envs, spacing, num_per_row):
@@ -174,9 +171,22 @@ class FrankaCabinet(VecTask):
         self.num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         self.num_franka_dofs = self.gym.get_asset_dof_count(franka_asset)
 
+        # load cabinet asset
+        # asset_options.flip_visual_attachments = False
+        # asset_options.collapse_fixed_joints = True
+        # asset_options.disable_gravity = False
+        # asset_options.default_dof_drive_mode = gymapi.DOF_MODE_NONE
+        # asset_options.armature = 0.005
+        # cabinet_asset = self.gym.load_asset(self.sim, asset_root, cabinet_asset_file, asset_options)
+
+
+        # self.num_cabinet_bodies = self.gym.get_asset_rigid_body_count(cabinet_asset)
+        # self.num_cabinet_dofs = self.gym.get_asset_dof_count(cabinet_asset)
 
         print("num franka bodies: ", self.num_franka_bodies)
         print("num franka dofs: ", self.num_franka_dofs)
+        # print("num cabinet bodies: ", self.num_cabinet_bodies)
+        # print("num cabinet dofs: ", self.num_cabinet_dofs)
 
         # set franka dof properties
         franka_dof_props = self.gym.get_asset_dof_properties(franka_asset)
@@ -200,6 +210,11 @@ class FrankaCabinet(VecTask):
         self.franka_dof_speed_scales[[7, 8]] = 0.1
         franka_dof_props['effort'][7] = 200
         franka_dof_props['effort'][8] = 200
+
+        # set cabinet dof properties
+        # cabinet_dof_props = self.gym.get_asset_dof_properties(cabinet_asset)
+        # for i in range(self.num_cabinet_dofs):
+        #     cabinet_dof_props['damping'][i] = 10.0
 
         # create prop assets
         box_opts = gymapi.AssetOptions()
@@ -278,48 +293,33 @@ class FrankaCabinet(VecTask):
                         if prop_count >= self.num_props:
                             break
                         # propx = xmin + k * self.prop_spacing
-
-                        random.seed()
-
                         prop_state_pose = gymapi.Transform()
 
-
-                        
-                        roll = 0
-                        pitch = 0
-                        yaw = 0
+                        # # Correct
                         prop_state_pose.p.x = 0.5 # drawer_pose.p.x + propx
                         # propz, propy = 0, prop_up
                         prop_state_pose.p.y = 0.0 #drawer_pose.p.y + propy
                         prop_state_pose.p.z = 0.05 # drawer_pose.p.z + propz
 
+                        # # Test
+                        # prop_state_pose.p.x = hand_pose.p.x
+                        # propz, propy = 0, prop_up
+                        # prop_state_pose.p.y = hand_pose.p.y
+                        # prop_state_pose.p.z = hand_pose.p.z
+                        # prop_state_pose.r.x = hand_pose.r.x
+                        # prop_state_pose.r.y = hand_pose.r.y
+                        # prop_state_pose.r.z = hand_pose.r.z
+                        # prop_state_pose.r.w = hand_pose.r.w
 
-                        # Use random positioning?
 
-                        if self.enRand:
-                            prop_state_pose.p.x = randrange_float(0.40, 0.80, self.prop_spacing) # returns 2.4
-                            # propz, propy = 0, p
-                            prop_state_pose.p.y = randrange_float(-0.50, 0.50, self.prop_spacing)
-                            prop_state_pose.p.z = 0.05
-                            yaw = random.uniform(0.00000, 6.28318)
-            
-
-                        qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-                        qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
-                        qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
-                        qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-                        
-
-                        prop_state_pose.r = gymapi.Quat(qx, qy, qz, qw)
-
+                        prop_state_pose.r = gymapi.Quat(0, 0, 0, 1)
                         prop_actor = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         prop_count += 1
 
                         prop_idx = j * props_per_row + k
-                        self.default_prop_states.append([prop_state_pose.p.x , prop_state_pose.p.y, prop_state_pose.p.z,
+                        self.default_prop_states.append([prop_state_pose.p.x, prop_state_pose.p.y, prop_state_pose.p.z,
                                                          prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
                                                          0, 0, 0, 0, 0, 0])
-                        
             if self.aggregate_mode > 0:
                 self.gym.end_aggregate(env_ptr)
 
@@ -484,57 +484,7 @@ class FrankaCabinet(VecTask):
         # reset cabinet
         #self.cabinet_dof_state[env_ids, :] = torch.zeros_like(self.cabinet_dof_state[env_ids])
 
-        # reset props (Random)
-        if self.enRand:
-
-            self.rand_prop_states = []
-            for i in range(self.num_envs):
-                if self.num_props > 0:
-
-
-                    props_per_row = int(np.ceil(np.sqrt(self.num_props)))
-                    xmin = -0.5 * self.prop_spacing * (props_per_row - 1)
-                    yzmin = -0.5 * self.prop_spacing * (props_per_row - 1)
-
-                    prop_count = 0
-                    for j in range(props_per_row):
-                        prop_up = yzmin + j * self.prop_spacing
-                        for k in range(props_per_row):
-                            if prop_count >= self.num_props:
-                                break
-                            # propx = xmin + k * self.prop_spacing
-
-                            random.seed()
-
-                            prop_state_pose = gymapi.Transform()
-
-
-                            prop_state_pose.p.x = randrange_float(0.40, 0.80, self.prop_spacing) # returns 2.4
-                            # propz, propy = 0, p
-                            prop_state_pose.p.y = randrange_float(-0.50, 0.50, self.prop_spacing)
-                            prop_state_pose.p.z = 0.05
-                            
-                            roll = 0
-                            pitch = 0
-                            yaw = random.uniform(0.00000, 6.28318)
-
-                            qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-                            qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
-                            qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
-                            qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-                            
-
-                            prop_state_pose.r = gymapi.Quat(qx, qy, qz, qw)
-                            prop_count += 1
-
-                            prop_idx = j * props_per_row + k
-                            self.rand_prop_states.append([prop_state_pose.p.x , prop_state_pose.p.y, prop_state_pose.p.z,
-                                                            prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
-                                                            0, 0, 0, 0, 0, 0])
-        
-            self.default_prop_states = to_torch(self.rand_prop_states, device=self.device, dtype=torch.float).view(self.num_envs, self.num_props, 13)
-
-
+        # reset props
         if self.num_props > 0:
             prop_indices = self.global_indices[env_ids, 1:].flatten()
             self.prop_states[env_ids] = self.default_prop_states[env_ids]
@@ -567,7 +517,6 @@ class FrankaCabinet(VecTask):
         env_ids_int32 = torch.arange(self.num_envs, dtype=torch.int32, device=self.device)
         self.gym.set_dof_position_target_tensor(self.sim,
                                                 gymtorch.unwrap_tensor(self.franka_dof_targets))
-        # print("Prop grasp_pos: ", self.prop_grasp_pos[0])
         # print("Finished Pre_physx")
 
     def post_physics_step(self):
@@ -624,9 +573,6 @@ class FrankaCabinet(VecTask):
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], py[0], py[1], py[2]], [0, 1, 0])
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], pz[0], pz[1], pz[2]], [0, 0, 1])
     # print("Finished post physx")
-
-def randrange_float(start, stop, step):
-    return random.randint(0, int((stop - start) / step)) * step + start
 
 #####################################################################
 ###=========================jit functions=========================###
@@ -720,7 +666,6 @@ def compute_franka_reward(
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
 
     return rewards, reset_buf
-
 
 
 @torch.jit.script

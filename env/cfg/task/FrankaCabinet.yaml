@@ -16,6 +16,7 @@ env:
   startPositionNoise: 0.0
   startRotationNoise: 0.0
 
+  enableRand: True
   numProps: 1
   aggregateMode: 3
 
