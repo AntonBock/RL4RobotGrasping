@@ -417,8 +417,14 @@ class FrankaCabinet(VecTask):
     def compute_reward(self, actions):
         
         self.gym.refresh_net_contact_force_tensor(self.sim)
-        test5 = self.gym.acquire_net_contact_force_tensor(self.sim)
-        test4 = gymtorch.wrap_tensor(test5)
+        _force_vec = self.gym.acquire_net_contact_force_tensor(self.sim)
+        force_vec = gymtorch.wrap_tensor(_force_vec)
+        print(f"FORCES:{force_vec.shape} {force_vec}")
+
+        self.gym.refresh_dof_force_tensor(self.sim)
+        _forces = self.gym.acquire_dof_force_tensor(self.sim)
+        forces = gymtorch.wrap_tensor(_forces)
+        #print(f"FORCES:{forces.shape} {forces}")
 
         self.rew_buf[:], self.reset_buf[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions, #self.cabinet_dof_pos,
@@ -431,7 +437,7 @@ class FrankaCabinet(VecTask):
         # print("Finished computing reward")
 
     def compute_observations(self):
-        # print("Computing observations")
+
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
