@@ -291,7 +291,7 @@ class FrankaCabinet(VecTask):
                         prop_state_pose.p.x = 0.5 # drawer_pose.p.x + propx
                         # propz, propy = 0, prop_up
                         prop_state_pose.p.y = 0.0 #drawer_pose.p.y + propy
-                        prop_state_pose.p.z = 0.05 # drawer_pose.p.z + propz
+                        prop_state_pose.p.z = 0.026 # drawer_pose.p.z + propz
 
 
                         # Use random positioning?
@@ -415,16 +415,10 @@ class FrankaCabinet(VecTask):
         print("Finished initialising data")
 
     def compute_reward(self, actions):
-        # print("Computing reward")
-        # old
-        # self.rew_buf[:], self.reset_buf[:] = compute_franka_reward(
-        #     self.reset_buf, self.progress_buf, self.actions, self.cabinet_dof_pos,
-        #     self.franka_grasp_pos, self.drawer_grasp_pos, self.franka_grasp_rot, self.drawer_grasp_rot,
-        #     self.franka_lfinger_pos, self.franka_rfinger_pos,
-        #     self.gripper_forward_axis, self.drawer_inward_axis, self.gripper_up_axis, self.drawer_up_axis,
-        #     self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale, self.open_reward_scale,
-        #     self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length
-        # )
+        
+        self.gym.refresh_net_contact_force_tensor(self.sim)
+        test5 = self.gym.acquire_net_contact_force_tensor(self.sim)
+        test4 = gymtorch.wrap_tensor(test5)
 
         self.rew_buf[:], self.reset_buf[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions, #self.cabinet_dof_pos,
@@ -631,7 +625,7 @@ def randrange_float(start, stop, step):
 #####################################################################
 ###=========================jit functions=========================###
 #####################################################################
-
+rewarded = False
 @torch.jit.script
 def compute_franka_reward(
     reset_buf, progress_buf, actions,
@@ -693,16 +687,28 @@ def compute_franka_reward(
     # open_reward = cabinet_dof_pos[:, 3] * around_handle_reward + cabinet_dof_pos[:, 3]  # drawer_top_joint
 
     # How high the box has been lifted
-    height_reward = torch.where(prop_grasp_pos[:, 2]>6, 5, 0) * height_reward_scale  # drawer_top_joint
-
+    height_reward = torch.where(prop_grasp_pos[:, 2]>10, 5, 0) * height_reward_scale  # drawer_top_joint
     # OLD
     # rewards = dist_reward_scale * dist_reward + rot_reward_scale * rot_reward \
     #     + around_handle_reward_scale * around_handle_reward + open_reward_scale * open_reward \
     #     + finger_dist_reward_scale * finger_dist_reward - action_penalty_scale * action_penalty
 
     # print("Penalty: ", action_penalty_scale * action_penalty)
+    
+    finger_dist = torch.norm(franka_lfinger_pos - franka_rfinger_pos, p=2, dim=-1)
+   
 
-    rewards = height_reward + dist_reward + lfinger_reward + rfinger_reward - action_penalty
+    close_reward = torch.where(d <= 0.3, 0.05, 0.0)
+
+    dist_reward = torch.where(d <= 0.06, 100, 0)
+    height_reward = torch.where(prop_grasp_pos[:, 2]>4, 500, 0)
+        
+    
+    time_penalty = 0.1
+
+    
+    rewards = dist_reward + close_reward - time_penalty
+
     #print(f"Dist: {dist_reward_scale * dist_reward}, Height: {height_reward_scale * height_reward}, Finger: {finger_dist_reward_scale * lfinger_dist}")
     # # bonus for opening drawer properly
     # rewards = torch.where(cabinet_dof_pos[:, 3] > 0.01, rewards + 0.5, rewards)
@@ -716,7 +722,8 @@ def compute_franka_reward(
     #                       torch.ones_like(rewards) * -1, rewards)
     
     # reset if drawer is open or max length reached
-    #reset_buf = torch.where(prop_grasp_pos[:, 2] > 20, torch.ones_like(reset_buf), reset_buf)
+    #reset_buf = torch.ones_like(reset_buf) if height_reward > 100 else reset_buf
+    reset_buf = torch.where(d <= 0.06, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
 
     return rewards, reset_buf
