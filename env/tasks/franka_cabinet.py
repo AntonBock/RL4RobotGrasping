@@ -26,6 +26,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#from msilib import add_stream
 import numpy as np
 import os
 import torch
@@ -58,7 +59,8 @@ class FrankaCabinet(VecTask):
         self.finger_dist_reward_scale = self.cfg["env"]["fingerDistRewardScale"]
         self.action_penalty_scale = self.cfg["env"]["actionPenaltyScale"]
 
-        self.enRand = self.cfg["env"]["enableRand"]
+        self.randPos = self.cfg["env"]["randomPropPosition"]
+        self.randProp = self.cfg["env"]["propSelect"]
 
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
 
@@ -101,8 +103,8 @@ class FrankaCabinet(VecTask):
         self.franka_dof_pos = self.franka_dof_state[..., 0]
         self.franka_dof_vel = self.franka_dof_state[..., 1]
         self.prop_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:]
-        self.prop_dof_pos = self.prop_dof_state[..., 0] # How to replace with box?
-        self.prop_dof_vel = self.prop_dof_state[..., 1] # How to replace with box?
+        self.prop_dof_pos = self.prop_dof_state[..., 0] 
+        self.prop_dof_vel = self.prop_dof_state[..., 1] 
 
         self.rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(self.num_envs, -1, 13)
         self.num_bodies = self.rigid_body_states.shape[1]
@@ -149,11 +151,15 @@ class FrankaCabinet(VecTask):
 
         asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets")
         franka_asset_file = "urdf/franka_description/robots/franka_panda.urdf"
-        sphere_asset_file = "urdf/donut_1/donut.urdf"
+        box_asset_file = "urdf/cube/cube.urdf"
+        cyl_asset_file = "urdf/cylinder/cylinder.urdf"
+        sphere_asset_file = "urdf/sphere/sphere.urdf"
 
         if "asset" in self.cfg["env"]:
             asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
             franka_asset_file = self.cfg["env"]["asset"].get("assetFileNameFranka", franka_asset_file)
+            box_asset_file = self.cfg["env"]["asset"].get("assetFileNameBox", box_asset_file)
+            cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
             sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
             
 
@@ -203,18 +209,18 @@ class FrankaCabinet(VecTask):
         franka_dof_props['effort'][8] = 200
 
         # create prop assets
-        box_opts = gymapi.AssetOptions()
-        box_opts.density = 400
-        prop_asset = self.gym.create_box(self.sim, self.prop_width, self.prop_height, self.prop_width, box_opts)
+        # box_opts = gymapi.AssetOptions()
+        # box_opts.density = 400
+        # prop_asset = self.gym.create_box(self.sim, self.prop_width, self.prop_height, self.prop_width, box_opts)
 
         franka_start_pose = gymapi.Transform()
         franka_start_pose.p = gymapi.Vec3(1.0, 0.0, 0.0)
         franka_start_pose.r = gymapi.Quat(0.0, 0.0, 1.0, 0.0)
 
 
+        box_asset = self.gym.load_asset(self.sim, asset_root, box_asset_file)
+        cyl_asset = self.gym.load_asset(self.sim, asset_root, cyl_asset_file)
         sphere_asset = self.gym.load_asset(self.sim, asset_root, sphere_asset_file)
-        sphere_start_pose = gymapi.Transform()
-        sphere_start_pose.p = gymapi.Vec3(1, 1, 1)
 
 
 
@@ -226,8 +232,8 @@ class FrankaCabinet(VecTask):
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
-        num_prop_bodies = self.gym.get_asset_rigid_body_count(prop_asset)
-        num_prop_shapes = self.gym.get_asset_rigid_shape_count(prop_asset)
+        num_prop_bodies = 1 #self.gym.get_asset_rigid_body_count(prop_asset)
+        num_prop_shapes = 1 #self.gym.get_asset_rigid_shape_count(prop_asset)
         max_agg_bodies = num_franka_bodies + self.num_props * num_prop_bodies 
         max_agg_shapes = num_franka_shapes + self.num_props * num_prop_shapes 
 
@@ -290,8 +296,8 @@ class FrankaCabinet(VecTask):
 
                         # Use random positioning?
 
-                        if self.enRand:
-                            prop_state_pose.p.x = randrange_float(0.40, 0.80, self.prop_spacing) # returns 2.4
+                        if self.randPos:
+                            prop_state_pose.p.x = randrange_float(0.40, 0.80, self.prop_spacing)
                             # propz, propy = 0, p
                             prop_state_pose.p.y = randrange_float(-0.50, 0.50, self.prop_spacing)
                             prop_state_pose.p.z = 0.05
@@ -306,7 +312,24 @@ class FrankaCabinet(VecTask):
 
                         prop_state_pose.r = gymapi.Quat(qx, qy, qz, qw)
 
-                        sphere_actor = self.gym.create_actor(env_ptr, sphere_asset, prop_state_pose, "sphere{}".format(prop_count), i, 0, 0)
+                        # choice of prop
+
+
+
+                        if self.randProp == "box":
+                            prop_actor = self.gym.create_actor(env_ptr, box_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
+                        elif self.randProp == "cyl":
+                            prop_actor = self.gym.create_actor(env_ptr, cyl_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
+                        elif self.randProp == "sphere":
+                            prop_actor = self.gym.create_actor(env_ptr, sphere_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
+                        elif self.randProp == "rand":
+                            x = chooseProp()
+                            if x==0: temp_asset=box_asset
+                            elif x==1: temp_asset=cyl_asset
+                            elif x==2: temp_asset=sphere_asset
+                            prop_actor = self.gym.create_actor(env_ptr, temp_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
+
+                        # xtra_actor = self.gym.create_actor(env_ptr, xtra_asset, prop_state_pose, "xtra{}".format(prop_count), i, 0, 0)
                         # prop_actor = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         prop_count += 1
                         
@@ -326,7 +349,7 @@ class FrankaCabinet(VecTask):
         
         self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
         #self.drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
-        self.prop_handle = self.gym.find_actor_rigid_body_handle(env_ptr, sphere_actor, "prop_box")
+        self.prop_handle = self.gym.find_actor_rigid_body_handle(env_ptr, prop_actor, "prop_box")
         # self.gym.set_actor_scale(env_ptr, self.prop_handle, 5.2)
         # self.prop_handle = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
         self.lfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_leftfinger")
@@ -495,7 +518,7 @@ class FrankaCabinet(VecTask):
         #self.cabinet_dof_state[env_ids, :] = torch.zeros_like(self.cabinet_dof_state[env_ids])
 
         # reset props (Random)
-        if self.enRand:
+        if self.randPos:
 
             self.rand_prop_states = []
             for i in range(self.num_envs):
@@ -541,6 +564,13 @@ class FrankaCabinet(VecTask):
                             self.rand_prop_states.append([prop_state_pose.p.x , prop_state_pose.p.y, prop_state_pose.p.z,
                                                             prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
                                                             0, 0, 0, 0, 0, 0])
+
+                            # if self.randProp == "rand":
+                            #     x = chooseProp()
+                            #     if x==0: temp_asset=box_asset
+                            #     elif x==1: temp_asset=cyl_asset
+                            #     elif x==2: temp_asset=sphere_asset
+                            #     prop_actor = self.gym.create_actor(env_ptr, temp_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
         
             self.default_prop_states = to_torch(self.rand_prop_states, device=self.device, dtype=torch.float).view(self.num_envs, self.num_props, 13)
 
@@ -637,6 +667,10 @@ class FrankaCabinet(VecTask):
 
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
+
+def chooseProp():
+    return np.random.randint(0,3)
+
 
 #####################################################################
 ###=========================jit functions=========================###
