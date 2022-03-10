@@ -149,12 +149,13 @@ class FrankaCabinet(VecTask):
 
         asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets")
         franka_asset_file = "urdf/franka_description/robots/franka_panda.urdf"
-        # cabinet_asset_file = "urdf/sektion_cabinet_model/urdf/sektion_cabinet_2.urdf"
+        sphere_asset_file = "urdf/sphere/model.sdf"
 
         if "asset" in self.cfg["env"]:
             asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
             franka_asset_file = self.cfg["env"]["asset"].get("assetFileNameFranka", franka_asset_file)
-            # cabinet_asset_file = self.cfg["env"]["asset"].get("assetFileNameCabinet", cabinet_asset_file)
+            sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
+            
 
         # load franka asset
         asset_options = gymapi.AssetOptions()
@@ -210,21 +211,27 @@ class FrankaCabinet(VecTask):
         franka_start_pose.p = gymapi.Vec3(1.0, 0.0, 0.0)
         franka_start_pose.r = gymapi.Quat(0.0, 0.0, 1.0, 0.0)
 
-        # cabinet_start_pose = gymapi.Transform()
-        # cabinet_start_pose.p = gymapi.Vec3(2, 0, 0.4) # *get_axis_params(0.4, self.up_axis_idx)) 
+
+        sphere_asset = self.gym.load_asset(self.sim, asset_root, sphere_asset_file)
+        sphere_start_pose = gymapi.Transform()
+        sphere_start_pose.p = gymapi.Vec3(1, 1, 1)
+
+
+
+
+
+
+
 
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
-        # num_cabinet_bodies = self.gym.get_asset_rigid_body_count(cabinet_asset)
-        # num_cabinet_shapes = self.gym.get_asset_rigid_shape_count(cabinet_asset)
         num_prop_bodies = self.gym.get_asset_rigid_body_count(prop_asset)
         num_prop_shapes = self.gym.get_asset_rigid_shape_count(prop_asset)
-        max_agg_bodies = num_franka_bodies + self.num_props * num_prop_bodies # + num_cabinet_bodies 
-        max_agg_shapes = num_franka_shapes + self.num_props * num_prop_shapes # + num_cabinet_shapes 
+        max_agg_bodies = num_franka_bodies + self.num_props * num_prop_bodies 
+        max_agg_shapes = num_franka_shapes + self.num_props * num_prop_shapes 
 
         self.frankas = []
-        # self.cabinets = []
         self.default_prop_states = []
         self.prop_start = []
         self.envs = []
@@ -245,14 +252,7 @@ class FrankaCabinet(VecTask):
             if self.aggregate_mode == 2:
                 self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
-            # cabinet_pose = cabinet_start_pose
-            # cabinet_pose.p.x += self.start_position_noise * (np.random.rand() - 0.5)
-            # dz = 0.5 * np.random.rand()
-            # dy = np.random.rand() - 0.5
-            # cabinet_pose.p.y += self.start_position_noise * dy
-            # cabinet_pose.p.z += self.start_position_noise * dz
-            # cabinet_actor = self.gym.create_actor(env_ptr, cabinet_asset, cabinet_pose, "cabinet", i, 2, 0)# Dies if commented out???
-            #self.gym.set_actor_dof_properties(env_ptr, cabinet_actor, cabinet_dof_props) 
+
 
 
             if self.aggregate_mode == 1:
@@ -260,11 +260,7 @@ class FrankaCabinet(VecTask):
 
             if self.num_props > 0:
                 self.prop_start.append(self.gym.get_sim_actor_count(self.sim))
-                #drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
-                #drawer_pose = self.gym.get_rigid_transform(env_ptr, drawer_handle)
 
-                # hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
-                # hand_pose = self.gym.get_rigid_transform(env_ptr, hand_handle)
 
 
                 props_per_row = int(np.ceil(np.sqrt(self.num_props)))
@@ -310,7 +306,8 @@ class FrankaCabinet(VecTask):
 
                         prop_state_pose.r = gymapi.Quat(qx, qy, qz, qw)
 
-                        prop_actor = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
+                        sphere_actor = self.gym.create_actor(env_ptr, sphere_asset, prop_state_pose, "sphere{}".format(prop_count), i, 0, 0)
+                        # prop_actor = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         prop_count += 1
 
                         prop_idx = j * props_per_row + k
@@ -328,7 +325,7 @@ class FrankaCabinet(VecTask):
         
         self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
         #self.drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
-        self.prop_handle = self.gym.find_actor_rigid_body_handle(env_ptr, prop_actor, "prop_box")
+        self.prop_handle = self.gym.find_actor_rigid_body_handle(env_ptr, sphere_actor, "prop_box")
         # self.prop_handle = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
         self.lfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_leftfinger")
         self.rfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_rightfinger")
