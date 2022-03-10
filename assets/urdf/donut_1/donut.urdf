@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<robot name="donut_1">
+  <link name="donut_1__link_6">
+    <inertial>
+      <mass value="0"/>
+      <origin rpy="0 0 0" xyz="0 0 0.05"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+    <collision name="donut_1__collision">
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://donut_1/meshes/donut1.dae" scale="1 1 1"/>
+      </geometry>
+    </collision>
+    <visual name="donut_1__visual">
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://donut_1/meshes/donut1.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>
