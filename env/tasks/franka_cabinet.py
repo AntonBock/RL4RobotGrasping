@@ -36,6 +36,15 @@ from isaacgym.torch_utils import *
 from tasks.base.vec_task import VecTask
 
 
+
+from numpy.random import choice
+from numpy.random.mtrand import triangular
+from scipy import interpolate
+from isaacgym.terrain_utils import *
+from math import sqrt
+
+
+
 class FrankaCabinet(VecTask):
 
     def __init__(self, cfg, sim_device, graphics_device_id, headless):
@@ -60,6 +69,7 @@ class FrankaCabinet(VecTask):
 
         self.randPos = self.cfg["env"]["randomPropPosition"]
         self.randProp = self.cfg["env"]["propSelect"]
+        self.randTerrain = self.cfg["env"]["randTerrain"]
 
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
 
@@ -129,22 +139,27 @@ class FrankaCabinet(VecTask):
         self.sim_params.gravity.z = -9.81
         self.sim = super().create_sim(
             self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
+            
         self._create_ground_plane()
         self._create_envs(self.num_envs, self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
         print("Finished creating sim")
 
 
     def _create_ground_plane(self):
-        print("Creating ground plane")
-        plane_params = gymapi.PlaneParams()
-        plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
-        self.gym.add_ground(self.sim, plane_params)
-        print("Finished creating ground plane")
+        if self.randTerrain==False:
+            print("Creating ground plane")
+            plane_params = gymapi.PlaneParams()
+            plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
+            self.gym.add_ground(self.sim, plane_params)
+            print("Finished creating ground plane")
+        
     
 
 
     def _create_envs(self, num_envs, spacing, num_per_row):
         print("Creating envs")
+
+        print("Num pr row: ", num_per_row)
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
@@ -175,7 +190,7 @@ class FrankaCabinet(VecTask):
             box_asset_file = self.cfg["env"]["asset"].get("assetFileNameBox", box_asset_file)
             cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
             sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
-            
+
 
         franka_asset = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
 
@@ -228,12 +243,6 @@ class FrankaCabinet(VecTask):
         sphere_asset = self.gym.load_asset(self.sim, asset_root, sphere_asset_file)
 
 
-
-
-
-
-
-
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
@@ -248,6 +257,9 @@ class FrankaCabinet(VecTask):
         self.envs = []
         
         print("Iterating through environments")
+        tx = -spacing
+        ty= -spacing*3
+        
         for i in range(self.num_envs):
             # create env instance
             env_ptr = self.gym.create_env(
@@ -269,9 +281,53 @@ class FrankaCabinet(VecTask):
             if self.aggregate_mode == 1:
                 self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
+
+            print("env_ptr: ", env_ptr)
+
+
+
+
+            #Terrain generation
+            
+            if self.randTerrain:
+                terrain_width = spacing*2
+                terrain_length = spacing*2
+                horizontal_scale = 0.25  # [m]
+                vertical_scale = 0.005  # [m]
+                num_rows = int(terrain_width/horizontal_scale)
+                num_cols = int(terrain_length/horizontal_scale)
+                heightfield = np.zeros((num_rows, num_cols), dtype=np.int16)
+
+
+                subt=SubTerrain(width=num_rows, length=num_cols, vertical_scale=vertical_scale, horizontal_scale=horizontal_scale)
+
+
+                heightfield = random_uniform_terrain(subt, min_height=-0.2, max_height=0.0, step=0.1, downsampled_scale=0.5).height_field_raw
+
+                # add the terrain as a triangle mesh
+                vertices, triangles = convert_heightfield_to_trimesh(heightfield, horizontal_scale=horizontal_scale, vertical_scale=vertical_scale, slope_threshold=1.5)
+                tm_params = gymapi.TriangleMeshParams()
+                tm_params.nb_vertices = vertices.shape[0]
+                tm_params.nb_triangles = triangles.shape[0]
+                
+
+                if i % num_per_row == 0: 
+                    tx = -spacing
+                    ty += spacing*2
+                
+        
+                tm_params.transform.p.x = tx
+                tm_params.transform.p.y = ty
+
+            
+                self.gym.add_triangle_mesh(self.sim, vertices.flatten(), triangles.flatten(), tm_params)
+                tx += spacing*2
+            
+            
+            
+
             if self.num_props > 0:
                 self.prop_start.append(self.gym.get_sim_actor_count(self.sim))
-
 
 
                 props_per_row = int(np.ceil(np.sqrt(self.num_props)))
@@ -293,10 +349,10 @@ class FrankaCabinet(VecTask):
                         roll = 0
                         pitch = 0
                         yaw = 0
-                        prop_state_pose.p.x = 0.5 # drawer_pose.p.x + propx
-                        # propz, propy = 0, prop_up
-                        prop_state_pose.p.y = 0.0 #drawer_pose.p.y + propy
-                        prop_state_pose.p.z = 0.026 # drawer_pose.p.z + propz
+                        prop_state_pose.p.x = 0.5 
+                       
+                        prop_state_pose.p.y = 0.0 
+                        prop_state_pose.p.z = 0.026 
 
 
                         # Use random positioning?
