@@ -407,40 +407,45 @@ class FrankaCabinet(VecTask):
         _force_vec = self.gym.acquire_net_contact_force_tensor(self.sim)
         force_vec = gymtorch.wrap_tensor(_force_vec)
         force_vec = force_vec.view(-1, 11, 3)
-        force_vec_left = force_vec.select(1, 8)
-        force_vec_right = force_vec.select(1, 9)
+        _force_vec_left = force_vec.select(1, 8)
+        _force_vec_right = force_vec.select(1, 9)
 
-        force_vec_left = force_vec_left.cpu().numpy()
-        force_vec_right = force_vec_right.cpu().numpy()
-        #print(f"FORCES:{force_vec_left}")
+        force_tens = torch.where(torch.norm(abs(_force_vec_left)-abs(_force_vec_right), p=2, dim=-1) < 1, 1, 0)
+        force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) > 5, force_tens, 0)
+        force_tens = torch.where(torch.norm(abs(_force_vec_left)+abs(_force_vec_right), p=2, dim=-1) > 70, -1, force_tens)
+        # force_vec_left = _force_vec_left.cpu().numpy()
+        # force_vec_right = _force_vec_right.cpu().numpy()
         
-        right_forces = []
-        left_forces = []
-        force_tens = torch.empty(self.num_envs, dtype=torch.int16, device=0)
-        for i in range(self.num_envs):
+        # right_forces = []
+        # left_forces = []
+        # force_tens = torch.empty(self.num_envs, dtype=torch.int16, device=0)
+        # for i in range(self.num_envs):
 
-            left_f = gymapi.Vec3()
-            left_f.x = force_vec_left[i][0]
-            left_f.y = force_vec_left[i][1]
-            left_f.z = force_vec_left[i][2]
-            right_f = gymapi.Vec3()
-            right_f.x = force_vec_right[i][0]
-            right_f.y = force_vec_right[i][1]
-            right_f.z = force_vec_right[i][2]
+        #     left_f = gymapi.Vec3()
+        #     left_f.x = force_vec_left[i][0]
+        #     left_f.y = force_vec_left[i][1]
+        #     left_f.z = force_vec_left[i][2]
+        #     right_f = gymapi.Vec3()
+        #     right_f.x = force_vec_right[i][0]
+        #     right_f.y = force_vec_right[i][1]
+        #     right_f.z = force_vec_right[i][2]
 
-            left_force = self.lfinger_pose.transform_vector(left_f)
-            right_force = self.rfinger_pose.transform_vector(right_f)
+        #     left_force = self.lfinger_pose.transform_vector(left_f)
+        #     right_force = self.rfinger_pose.transform_vector(right_f)
             
-            left_forces.append(left_force)
-            right_forces.append(right_force)
+        #     left_forces.append(left_force)
+        #     right_forces.append(right_force)
 
-            if abs(left_force.y)> 1 and abs(right_force.y)> 1:
-                force_tens[i] = 1
-            else:
-                force_tens[i] = 0
-                
-        contacts = self.gym.get_env_rigid_contacts(self.envs[0])
-        print(contacts)
+            # if abs(left_force.y)> 1 and abs(right_force.y)> 1:
+            #     force_tens[i] = 1
+            # else:
+            #     force_tens[i] = 0
+
+        # if torch.norm(_force_vec_left[0], p=2, dim=-1) > 1:
+        #     print(f"FORCE_LEFT:{_force_vec_left[0]}")
+        #     print(f"FORCE_RIGHT:{_force_vec_right[0]}")
+        #     print(f"ROT_LEFT:{left_forces[0]}")
+        #     print(f"ROT_RIGHT:{right_forces[0]} \n")
 
         self.rew_buf[:], self.reset_buf[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
@@ -587,7 +592,6 @@ class FrankaCabinet(VecTask):
         # print("Finished Pre_physx")
 
     def post_physics_step(self):
-        # print("Post physx")
         self.progress_buf += 1
 
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
@@ -639,7 +643,7 @@ class FrankaCabinet(VecTask):
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], px[0], px[1], px[2]], [1, 0, 0])
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], py[0], py[1], py[2]], [0, 1, 0])
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], pz[0], pz[1], pz[2]], [0, 0, 1])
-    # print("Finished post physx")
+
 
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
@@ -663,36 +667,25 @@ def compute_franka_reward(
     d = torch.norm(franka_grasp_pos - prop_grasp_pos, p=2, dim=-1)
     dist_reward = 1.0 / (1.0 + d ** 2)
     dist_reward *= dist_reward
-    dist_reward = torch.where(d <= 0.02, dist_reward * 2, dist_reward) * dist_reward_scale
+    dist_reward = torch.where(d <= 0.06, dist_reward*5.0, dist_reward)
 
-    lfinger_dist = torch.norm(franka_lfinger_pos - prop_grasp_pos, p=2, dim=-1)
-    rfinger_dist = torch.norm(franka_rfinger_pos - prop_grasp_pos, p=2, dim=-1)
-
-    lfinger_reward = 1.0 / (1.0 + lfinger_dist ** 2)
-    lfinger_reward *= lfinger_reward
-    lfinger_reward = torch.where(d <= 0.05, lfinger_reward * 2, lfinger_reward) * finger_dist_reward_scale
-
-    rfinger_reward = 1.0 / (1.0 + rfinger_dist ** 2)
-    rfinger_reward *= rfinger_reward
-    rfinger_reward = torch.where(d <= 0.05, rfinger_reward * 2, rfinger_reward) * finger_dist_reward_scale
-
-    action_penalty = torch.sum(actions ** 2, dim=-1) * action_penalty_scale
+    #action_penalty = torch.sum(actions ** 2, dim=-1) * action_penalty_scale
     
     finger_dist = torch.norm(franka_lfinger_pos - franka_rfinger_pos, p=2, dim=-1)
     finger_penalty = torch.where(finger_dist<0.03, 0.1, 0.0)
 
-    close_reward = torch.where(d <= 0.3, 1.0, 0.0)
-    dist_reward = torch.where(d <= 0.06, 10, 0)
-    #height_reward = torch.where(prop_grasp_pos[:, 2]>4, 100, 0)
+    # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
+    # dist_reward = torch.where(d <= 0.06, 10, 0)
     height_reward = torch.where(prop_grasp_pos[:, 2]>0.07, 10000, 0)
+    #height_reward = torch.where(prop_grasp_pos[:, 2]>0.15, 100000, 0)
         
     time_penalty = 0.05
 
     grip_reward = grip_forces * 10
 
-    rewards = dist_reward + close_reward + height_reward + grip_reward - time_penalty - finger_penalty
+    rewards = dist_reward + height_reward + grip_reward - time_penalty - finger_penalty
 
-    #reset_buf = torch.ones_like(reset_buf) if height_reward > 100 else reset_buf
+    
     reset_buf = torch.where(prop_grasp_pos[:, 2]>0.07, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
 
