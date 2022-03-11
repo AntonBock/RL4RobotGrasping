@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<robot name="cube_v">
+  <link name="cube_v__link_2">
+    <inertial>
+      <mass value="1"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="0.166667" ixy="0" ixz="0" iyy="0.166667" iyz="0" izz="0.166667"/>
+    </inertial>
+    <collision name="cube_v__collision">
+      <origin rpy="0 0 0" xyz="0  0  0.05"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </collision>
+    <visual name="cube_v__visual">
+      <origin rpy="0 0 0" xyz="0  0  0.05"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>
