@@ -152,14 +152,10 @@ class FrankaCabinet(VecTask):
         franka_asset_file = "urdf/franka_description/robots/franka_panda.urdf"
         box_asset_file = "urdf/cube/cube.urdf"
         cyl_asset_file = "urdf/cylinder/cylinder.urdf"
-        sphere_asset_file = "urdf/sphere/sphere.urdf"
+        # sphere_asset_file = "urdf/sphere/sphere.urdf"
+        sphere_asset_file = "Rock/Rock.stl"
 
-        if "asset" in self.cfg["env"]:
-            asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
-            franka_asset_file = self.cfg["env"]["asset"].get("assetFileNameFranka", franka_asset_file)
-            box_asset_file = self.cfg["env"]["asset"].get("assetFileNameBox", box_asset_file)
-            cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
-            sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
+        
             
 
         # load franka asset
@@ -171,6 +167,16 @@ class FrankaCabinet(VecTask):
         asset_options.thickness = 0.001
         asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
         asset_options.use_mesh_materials = True
+
+
+        if "asset" in self.cfg["env"]:
+            asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
+            franka_asset_file = self.cfg["env"]["asset"].get("assetFileNameFranka", franka_asset_file)
+            box_asset_file = self.cfg["env"]["asset"].get("assetFileNameBox", box_asset_file)
+            cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
+            sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
+            
+
         franka_asset = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
 
         franka_dof_stiffness = to_torch([400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6], dtype=torch.float, device=self.device)

@@ -3,6 +3,7 @@ name: FrankaCabinet
 
 physics_engine: ${..physics_engine}
 
+
 # if given, will override the device setting in gym. 
 env:
   numEnvs: ${resolve_default:1024,${...num_envs}}
