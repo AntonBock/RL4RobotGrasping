@@ -53,3 +53,4 @@ CATKIN_IGNORE
 # Ignore data generated for runs
 runs/**
 images/**
+archived_runs/**
