@@ -167,8 +167,8 @@ class FrankaCabinet(VecTask):
         franka_asset_file = "urdf/franka_description/robots/franka_panda.urdf"
         box_asset_file = "urdf/cube/cube.urdf"
         cyl_asset_file = "urdf/cylinder/cylinder.urdf"
-        # sphere_asset_file = "urdf/sphere/sphere.urdf"
-        sphere_asset_file = "Rock/Rock.stl"
+        sphere_asset_file = "urdf/sphere/sphere.urdf"
+        # sphere_asset_file = "Rock/Rock.stl"
 
         
             
@@ -302,7 +302,7 @@ class FrankaCabinet(VecTask):
                 subt=SubTerrain(width=num_rows, length=num_cols, vertical_scale=vertical_scale, horizontal_scale=horizontal_scale)
 
 
-                heightfield = random_uniform_terrain(subt, min_height=-0.2, max_height=0.0, step=0.1, downsampled_scale=0.5).height_field_raw
+                heightfield = random_uniform_terrain(subt, min_height=-0.2, max_height=0.0, step=0.01, downsampled_scale=0.3).height_field_raw
 
                 # add the terrain as a triangle mesh
                 vertices, triangles = convert_heightfield_to_trimesh(heightfield, horizontal_scale=horizontal_scale, vertical_scale=vertical_scale, slope_threshold=1.5)
@@ -780,8 +780,12 @@ def compute_franka_reward(
     rewards = dist_reward + height_reward + grip_reward - time_penalty - finger_penalty
 
     
+
     reset_buf = torch.where(prop_grasp_pos[:, 2]>0.07, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
+
+    #reset if prop somehow falls down
+    reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
     return rewards, reset_buf
 
