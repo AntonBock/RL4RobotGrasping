@@ -17,9 +17,9 @@ env:
   startPositionNoise: 0.0
   startRotationNoise: 0.0
 
-  randTerrain: True
+  randTerrain: False
 
-  randomPropPosition: True
+  randomPropPosition: False
   propSelect: ${resolve_default:"box",${...prop_sel}}
   numProps: 1
   aggregateMode: 3
