@@ -170,29 +170,24 @@ class FrankaCabinet(VecTask):
         box_asset_file = "urdf/cube/cube.urdf"
         cyl_asset_file = "urdf/cylinder/cylinder.urdf"
         sphere_asset_file = "urdf/sphere/sphere.urdf"
-        rock_asset_file = "urdf/rock2/rock2.urdf"
+        # rock_asset_file = "urdf/rock2/rock2.urdf"
         # sphere_asset_file = "urdf/donut_1/donut.urdf"
 
         self.rockList = []
         d = {}
 
-        for i in range(len(os.listdir("assets/rocks/urdf"))):
-            rock_asset_file = os.path.join("rocks/urdf/",f"{i}.urdf")
-            rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)
-
+      
+        for i in range(len(os.listdir("assets/rocks/urdf"))):            
+            rock_asset_file = os.path.join("rocks/urdf/",f"{i}.urdf")         
+            rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)  
             rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
             self.rockList.append(rock_asset)
-            
- 
-            
+  
 
-        
-        
-            
 
         # load franka asset
         asset_options = gymapi.AssetOptions()
-        asset_options.convex_decomposition_from_submeshes=True
+        asset_options.convex_decomposition_from_submeshes=False
         asset_options.flip_visual_attachments = True
         asset_options.fix_base_link = True
         asset_options.collapse_fixed_joints = True

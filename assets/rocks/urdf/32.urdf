@@ -9,7 +9,7 @@
     <collision name="rock_collision">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://rocks/collision/32.stl" scale="1 1 1"/>
+        <mesh filename="package://rocks/visual/32.dae" scale="1 1 1"/>
       </geometry>
     </collision>
     <visual name="rock_visual">
