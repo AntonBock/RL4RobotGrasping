@@ -19,7 +19,7 @@ env:
 
   randTerrain: False
 
-  randomPropPosition: False
+  randomPropPosition: True
   propSelect: ${resolve_default:"box",${...prop_sel}}
   numProps: 1
   aggregateMode: 3

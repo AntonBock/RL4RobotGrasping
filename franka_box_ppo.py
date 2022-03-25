@@ -110,14 +110,14 @@ cfg_ppo["value_learning_rate"] = 5e-4
 
 
 if tt:
-    agent = PPO(networks=networks_ppo,
+    agent = PPO(models=networks_ppo,
                 memory=memory, 
                 cfg=cfg_ppo, 
                 observation_space=env.observation_space, 
                 action_space=env.action_space,
                 device=device)
 else:
-    agent = PPO(networks=networks_ppo,
+    agent = PPO(models=networks_ppo,
             memory=None, 
             cfg=cfg_ppo, 
             observation_space=env.observation_space, 
