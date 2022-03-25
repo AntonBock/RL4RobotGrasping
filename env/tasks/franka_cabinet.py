@@ -173,6 +173,20 @@ class FrankaCabinet(VecTask):
         rock_asset_file = "urdf/rock2/rock2.urdf"
         # sphere_asset_file = "urdf/donut_1/donut.urdf"
 
+        self.rockList = []
+        d = {}
+
+        for i in range(len(os.listdir("assets/rocks/urdf"))):
+            rock_asset_file = os.path.join("rocks/urdf/",f"{i}.urdf")
+            rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)
+
+            rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
+            self.rockList.append(rock_asset)
+            
+ 
+            
+
+        
         
             
 
@@ -194,7 +208,10 @@ class FrankaCabinet(VecTask):
             box_asset_file = self.cfg["env"]["asset"].get("assetFileNameBox", box_asset_file)
             cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
             sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
-            rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", rock_asset_file)
+            # rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)
+
+
+
 
 
         franka_asset = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
@@ -246,7 +263,7 @@ class FrankaCabinet(VecTask):
         box_asset = self.gym.load_asset(self.sim, asset_root, box_asset_file)
         cyl_asset = self.gym.load_asset(self.sim, asset_root, cyl_asset_file)
         sphere_asset = self.gym.load_asset(self.sim, asset_root, sphere_asset_file)
-        rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
+        # rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
 
 
         # compute aggregate size
@@ -389,14 +406,15 @@ class FrankaCabinet(VecTask):
                             prop_actor = self.gym.create_actor(env_ptr, cyl_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         elif self.randProp == "sphere":
                             prop_actor = self.gym.create_actor(env_ptr, sphere_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
-                        elif self.randProp == "rock":
-                            prop_actor = self.gym.create_actor(env_ptr, rock_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
+                        elif self.randProp == "randRock":
+                            x = chooseProp(len(self.rockList)-1)
+                            prop_actor = self.gym.create_actor(env_ptr, self.rockList[x], prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         elif self.randProp == "rand":
-                            x = chooseProp()
+                            x = chooseProp(3)
                             if x==0: temp_asset=box_asset
                             elif x==1: temp_asset=cyl_asset
                             elif x==2: temp_asset=sphere_asset
-                            elif x==3: temp_asset=rock_asset
+                            # elif x==3: temp_asset=rock_asset
                             prop_actor = self.gym.create_actor(env_ptr, temp_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
 
                         # xtra_actor = self.gym.create_actor(env_ptr, xtra_asset, prop_state_pose, "xtra{}".format(prop_count), i, 0, 0)
@@ -753,8 +771,8 @@ class FrankaCabinet(VecTask):
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
 
-def chooseProp():
-    return np.random.randint(0,4)
+def chooseProp(x):
+    return np.random.randint(0,x)
 
 
 #####################################################################
