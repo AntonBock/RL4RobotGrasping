@@ -170,7 +170,7 @@ class FrankaCabinet(VecTask):
         box_asset_file = "urdf/cube/cube.urdf"
         cyl_asset_file = "urdf/cylinder/cylinder.urdf"
         sphere_asset_file = "urdf/sphere/sphere.urdf"
-        rock_asset_file = "urdf/rock/rock.urdf"
+        rock_asset_file = "urdf/rock2/rock2.urdf"
         # sphere_asset_file = "urdf/donut_1/donut.urdf"
 
         
