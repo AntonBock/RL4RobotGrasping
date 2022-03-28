@@ -17,7 +17,8 @@ env:
   startPositionNoise: 0.0
   startRotationNoise: 0.0
 
-  randStartPos: 1.25
+  randStartPos: ${resolve_default:0.25,${...randness}} #standard: 0.25
+  randDynamics: True
   randTerrain: False
   randomPropPosition: False
   propSelect: ${resolve_default:"box",${...prop_sel}}

@@ -71,6 +71,7 @@ class FrankaCabinet(VecTask):
         self.randProp = self.cfg["env"]["propSelect"]
         self.randTerrain = self.cfg["env"]["randTerrain"]
         self.randFrankaPos = self.cfg["env"]["randStartPos"]
+        self.randDynamics = self.cfg["env"]["randDynamics"]
 
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
 
@@ -294,6 +295,20 @@ class FrankaCabinet(VecTask):
                 self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
             franka_actor = self.gym.create_actor(env_ptr, franka_asset, franka_start_pose, "franka", i, 1, 0)
+
+
+            if self.randDynamics:
+                randDyn = randrange_float(0.99, 1.01, 0.00001)
+            else:
+                randDyn = 1
+            
+            franka_dof_stiffness = to_torch([400*randDyn, 400*randDyn, 400*randDyn, 400*randDyn, 400*randDyn, 400*randDyn, 400*randDyn, 1.0e6, 1.0e6], dtype=torch.float, device=self.device)
+            franka_dof_damping = to_torch([80*randDyn, 80*randDyn, 80*randDyn, 80*randDyn, 80*randDyn, 80*randDyn, 80*randDyn, 1.0e2, 1.0e2], dtype=torch.float, device=self.device)
+
+            for mm in range(self.num_franka_dofs):
+                franka_dof_props['stiffness'][mm] = franka_dof_stiffness[mm]
+                franka_dof_props['damping'][mm] = franka_dof_damping[mm]
+
             self.gym.set_actor_dof_properties(env_ptr, franka_actor, franka_dof_props)
 
             if self.aggregate_mode == 2:
@@ -564,21 +579,16 @@ class FrankaCabinet(VecTask):
         # print("Running reset_idx")
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
-        
-
         pos = tensor_clamp(
             self.franka_default_dof_pos.unsqueeze(0) + self.randFrankaPos * (torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
 
-        # print("pos: ", pos)
 
-        # print("what to change: ", self.franka_dof_pos[env_ids, :])
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
         
-        # reset cabinet
-        #self.cabinet_dof_state[env_ids, :] = torch.zeros_like(self.cabinet_dof_state[env_ids])
+
 
         # reset props (Random)
         if self.randPos:
