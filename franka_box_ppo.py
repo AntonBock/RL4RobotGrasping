@@ -12,8 +12,10 @@ from skrl.trainers.torch import SequentialTrainer
 from skrl.envs.torch import wrap_env
 from skrl.envs.torch import load_isaacgym_env_preview2, load_isaacgym_env_preview3
 
-tt = True
-checkpoint = False
+#Training Time
+tt = True 
+#Use checkpoint for network
+checkpoint = False 
 
 # Define the models (stochastic and deterministic models) for the agent using helper classes 
 # and programming with two approaches (layer by layer and torch.nn.Sequential class).
@@ -28,15 +30,13 @@ class Policy(GaussianModel):
         self.linear_layer_1 = nn.Linear(self.num_observations, 512) #32
         self.linear_layer_2 = nn.Linear(512, 256)
         self.linear_layer_3 = nn.Linear(256, 128)
-        self.linear_layer_4 = nn.Linear(128, 64)
-        self.mean_action_layer = nn.Linear(64, self.num_actions)
+        self.mean_action_layer = nn.Linear(128, self.num_actions)
         self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions))
 
     def compute(self, states, taken_actions):
-        x = F.elu(self.linear_layer_1(states))
-        x = F.elu(self.linear_layer_2(x))
-        x = F.elu(self.linear_layer_3(x))
-        x = F.elu(self.linear_layer_4(x))
+        x = F.selu(self.linear_layer_1(states))
+        x = F.selu(self.linear_layer_2(x))
+        x = F.selu(self.linear_layer_3(x))
         return torch.tanh(self.mean_action_layer(x)), self.log_std_parameter
 
 class Value(DeterministicModel):
@@ -44,44 +44,34 @@ class Value(DeterministicModel):
         super().__init__(observation_space, action_space, device, clip_actions)
 
         self.net = nn.Sequential(nn.Linear(self.num_observations, 512),
-                                 nn.ELU(),
+                                 nn.SELU(),
                                  nn.Linear(512, 256),
-                                 nn.ELU(),
+                                 nn.SELU(),
                                  nn.Linear(256, 128),
-                                 nn.ELU(),
-                                 nn.Linear(128, 64),
-                                 nn.ELU(),
-                                 nn.Linear(64, 1))
+                                 nn.SELU(),
+                                 nn.Linear(128, 1))
 
     def compute(self, states, taken_actions):
         return self.net(states)
 
 
 # Load and wrap the Isaac Gym environment.
-    
 env = load_isaacgym_env_preview3(task_name="FrankaCabinet", isaacgymenvs_path="./env")
 env = wrap_env(env)
 
 device = env.device
 
-
 # Instantiate a RandomMemory as rollout buffer (any memory can be used for this)
 memory = RandomMemory(memory_size=16, num_envs=env.num_envs, device=device)
-
-
 
 # Instantiate the agent's models (function approximators).
 # PPO requires 2 models, visit its documentation for more details
 # https://skrl.readthedocs.io/en/latest/modules/skrl.agents.ppo.html#models-networks
-if tt:
-    networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
-                "value": Value(env.observation_space, env.action_space, device)}
-else:
-    networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
-                "value": None}
+
+networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
+            "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
+
     
-
-
 if checkpoint:
     networks_ppo["policy"].load("./runs/million/checkpoints/1000000_policy.pt") 
 else:
@@ -89,36 +79,26 @@ else:
     for network in networks_ppo.values():
         network.init_parameters(method_name="normal_", mean=0.0, std=0.1) 
 
-         
-
-
 # Configure and instantiate the agent.
 # Only modify some of the default configuration, visit its documentation to see all the options
 # https://skrl.readthedocs.io/en/latest/modules/skrl.agents.ppo.html#configuration-and-hyperparameters
 cfg_ppo = PPO_DEFAULT_CONFIG.copy()
 cfg_ppo["learning_starts"] = 0
 cfg_ppo["random_timesteps"] = 0
-cfg_ppo["rollouts"] = 16
-cfg_ppo["learning_epochs"] = 8
+cfg_ppo["rollouts"] = 32
+cfg_ppo["mini_batches"] = 4
+cfg_ppo["learning_epochs"] = 20
 cfg_ppo["grad_norm_clip"] = 0.5
 cfg_ppo["value_loss_scale"] = 2.0
+cfg_ppo["entropy_loss_scale"] = 0.01
 # logging to TensorBoard and write checkpoints each 16 and 1000 timesteps respectively
 cfg_ppo["experiment"]["write_interval"] = 50
 cfg_ppo["experiment"]["checkpoint_interval"] = 2000
 cfg_ppo["policy_learning_rate"] = 5e-4   # policy learning rate
 cfg_ppo["value_learning_rate"] = 5e-4
 
-
-if tt:
-    agent = PPO(networks=networks_ppo,
-                memory=memory, 
-                cfg=cfg_ppo, 
-                observation_space=env.observation_space, 
-                action_space=env.action_space,
-                device=device)
-else:
-    agent = PPO(networks=networks_ppo,
-            memory=None, 
+agent = PPO(networks=networks_ppo,
+            memory=(memory if tt else None), 
             cfg=cfg_ppo, 
             observation_space=env.observation_space, 
             action_space=env.action_space,

@@ -69,8 +69,6 @@ class FrankaCabinet(VecTask):
         self.distX_offset = 0.04
         self.dt = 1/60.
 
-        
-
         # prop dimensions
         self.prop_width = 0.05
         self.prop_height = 0.05
@@ -90,6 +88,8 @@ class FrankaCabinet(VecTask):
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
         rigid_body_tensor = self.gym.acquire_rigid_body_state_tensor(self.sim)
 
+        # reward state
+        self.reward_state = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
 
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
@@ -102,8 +102,8 @@ class FrankaCabinet(VecTask):
         self.franka_dof_pos = self.franka_dof_state[..., 0]
         self.franka_dof_vel = self.franka_dof_state[..., 1]
         self.prop_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:]
-        self.prop_dof_pos = self.prop_dof_state[..., 0] 
-        self.prop_dof_vel = self.prop_dof_state[..., 1] 
+        self.prop_dof_pos = self.prop_dof_state[..., 0]
+        self.prop_dof_vel = self.prop_dof_state[..., 1]
 
         self.rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(self.num_envs, -1, 13)
         self.num_bodies = self.rigid_body_states.shape[1]
@@ -344,7 +344,7 @@ class FrankaCabinet(VecTask):
             self.envs.append(env_ptr)
             self.frankas.append(franka_actor)
             # self.cabinets.append(cabinet_actor)
-            print("Environment no. ", i+1, " created")
+            #print("Environment no. ", i+1, " created")
         
         self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
         #self.drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
@@ -431,9 +431,13 @@ class FrankaCabinet(VecTask):
         _force_vec_left = force_vec.select(1, 8)
         _force_vec_right = force_vec.select(1, 9)
 
-        force_tens = torch.where(torch.norm(abs(_force_vec_left)-abs(_force_vec_right), p=2, dim=-1) < 1, 1, 0)
-        force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) > 5, force_tens, 0)
-        force_tens = torch.where(torch.norm(abs(_force_vec_left)+abs(_force_vec_right), p=2, dim=-1) > 70, -1, force_tens)
+        force_tens = torch.where(torch.norm(abs(_force_vec_left)-abs(_force_vec_right), p=2, dim=-1) < 1, 1.0, 0.0)
+        force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) > 5, 
+                        torch.where(torch.norm(_force_vec_right, p=2, dim=-1) > 5, force_tens.double(), 0.0), 0.0)
+        force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) < 250, 
+                        torch.where(torch.norm(_force_vec_right, p=2, dim=-1) < 250, force_tens.double(), -0.01), -0.01)
+        
+
         # force_vec_left = _force_vec_left.cpu().numpy()
         # force_vec_right = _force_vec_right.cpu().numpy()
         
@@ -474,7 +478,7 @@ class FrankaCabinet(VecTask):
             self.franka_lfinger_pos, self.franka_rfinger_pos,
             self.gripper_forward_axis, self.prop_inward_axis, self.gripper_up_axis, self.prop_up_axis,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale, self.height_reward_scale,
-            self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, force_tens
+            self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, force_tens, self.reward_state
         )
         # print("Finished computing reward")
 
@@ -602,6 +606,7 @@ class FrankaCabinet(VecTask):
                                               gymtorch.unwrap_tensor(self.dof_state),
                                               gymtorch.unwrap_tensor(multi_env_ids_int32), len(multi_env_ids_int32))
         
+        self.reward_state[env_ids] = 0
         self.progress_buf[env_ids] = 0
         self.reset_buf[env_ids] = 0
         # print("Finished reset_idx")
@@ -676,6 +681,7 @@ class FrankaCabinet(VecTask):
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
 
+
 def chooseProp():
     return np.random.randint(0,3)
 
@@ -683,7 +689,6 @@ def chooseProp():
 #####################################################################
 ###=========================jit functions=========================###
 #####################################################################
-rewarded = False
 @torch.jit.script
 def compute_franka_reward(
     reset_buf, progress_buf, actions,
@@ -691,38 +696,50 @@ def compute_franka_reward(
     franka_lfinger_pos, franka_rfinger_pos,
     gripper_forward_axis, prop_inward_axis, gripper_up_axis, prop_up_axis,
     num_envs, dist_reward_scale, rot_reward_scale, around_handle_reward_scale, height_reward_scale,
-    finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip_forces
+    finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip_forces, reward_state
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor) -> Tuple[Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor) -> Tuple[Tensor, Tensor]
 
     # distance from hand to the drawer
     d = torch.norm(franka_grasp_pos - prop_grasp_pos, p=2, dim=-1)
-    dist_reward = 1.0 / (1.0 + d ** 2)
-    dist_reward *= dist_reward
-    dist_reward = torch.where(d <= 0.06, dist_reward*5.0, dist_reward)
+    # dist_reward = 1.0 / (1.0 + d ** 2)
+    # dist_reward *= dist_reward
+    # dist_reward = torch.where(d <= 0.06, 5.0 , dist_reward.double())
 
-    #action_penalty = torch.sum(actions ** 2, dim=-1) * action_penalty_scale
+    # action_penalty = torch.sum(actions ** 2, dim=-1) * 0.01
     
-    finger_dist = torch.norm(franka_lfinger_pos - franka_rfinger_pos, p=2, dim=-1)
-    finger_penalty = torch.where(finger_dist<0.03, 0.1, 0.0)
+    # finger_dist = torch.norm(franka_lfinger_pos - franka_rfinger_pos, p=2, dim=-1)
+    # finger_penalty = torch.where(finger_dist<0.03, 100.0, 0.0)
 
-    # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
-    # dist_reward = torch.where(d <= 0.06, 10, 0)
-    height_reward = torch.where(prop_grasp_pos[:, 2]>0.07, 10000, 0)
-    #height_reward = torch.where(prop_grasp_pos[:, 2]>0.15, 100000, 0)
+    # height_reward = torch.where(prop_grasp_pos[:, 2]>0.07, prop_grasp_pos[:, 2]*1000, 0)
+    # height_reward = torch.where(prop_grasp_pos[:, 2]>0.15, 10000, 0)
         
-    time_penalty = 0.05
+    # grip_reward = grip_forces * 50
 
-    grip_reward = grip_forces * 10
+    # if height_reward[0] > 1:
+    #     print(height_reward[0])
 
-    rewards = dist_reward + height_reward + grip_reward - time_penalty - finger_penalty
-
+    # if grip_reward[0] > 5:
+    #     print(grip_reward[0])
     
-    reset_buf = torch.where(prop_grasp_pos[:, 2]>0.07, torch.ones_like(reset_buf), reset_buf)
+    
+    reward = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, 0), 0)
+    reward_state = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, reward_state), reward_state)
+    
+    reward = torch.where(reward_state == 1, torch.where(d <= 0.1, 7, 0), 0)
+    reward_state = torch.where(reward_state == 1, torch.where(d <= 0.1, 2, reward_state), reward_state)
+
+    reward = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 49, 0), 0)
+    reward_state = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 3, reward_state), reward_state)
+
+    time_penalty = 0.005
+
+    rewards = reward - time_penalty  #grip_reward + dist_reward + height_reward - finger_penalty - time_penalty
+
+    reset_buf = torch.where(grip_forces > 0.5, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
 
     return rewards, reset_buf
-
 
 
 @torch.jit.script
