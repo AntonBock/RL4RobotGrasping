@@ -36,6 +36,15 @@ from isaacgym.torch_utils import *
 from tasks.base.vec_task import VecTask
 
 
+
+from numpy.random import choice
+from numpy.random.mtrand import triangular
+from scipy import interpolate
+from isaacgym.terrain_utils import *
+from math import sqrt
+
+
+
 class FrankaCabinet(VecTask):
 
     def __init__(self, cfg, sim_device, graphics_device_id, headless):
@@ -60,6 +69,7 @@ class FrankaCabinet(VecTask):
 
         self.randPos = self.cfg["env"]["randomPropPosition"]
         self.randProp = self.cfg["env"]["propSelect"]
+        self.randTerrain = self.cfg["env"]["randTerrain"]
 
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
 
@@ -129,41 +139,55 @@ class FrankaCabinet(VecTask):
         self.sim_params.gravity.z = -9.81
         self.sim = super().create_sim(
             self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
+            
         self._create_ground_plane()
         self._create_envs(self.num_envs, self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
         print("Finished creating sim")
 
 
     def _create_ground_plane(self):
-        print("Creating ground plane")
-        plane_params = gymapi.PlaneParams()
-        plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
-        self.gym.add_ground(self.sim, plane_params)
-        print("Finished creating ground plane")
+        if self.randTerrain==False:
+            print("Creating ground plane")
+            plane_params = gymapi.PlaneParams()
+            plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
+            self.gym.add_ground(self.sim, plane_params)
+            print("Finished creating ground plane")
+        
     
 
 
     def _create_envs(self, num_envs, spacing, num_per_row):
         print("Creating envs")
+
+        print("Num pr row: ", num_per_row)
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
+
+        
 
         asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets")
         franka_asset_file = "urdf/franka_description/robots/franka_panda.urdf"
         box_asset_file = "urdf/cube/cube.urdf"
         cyl_asset_file = "urdf/cylinder/cylinder.urdf"
         sphere_asset_file = "urdf/sphere/sphere.urdf"
+        # rock_asset_file = "urdf/rock2/rock2.urdf"
+        # sphere_asset_file = "urdf/donut_1/donut.urdf"
 
-        if "asset" in self.cfg["env"]:
-            asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
-            franka_asset_file = self.cfg["env"]["asset"].get("assetFileNameFranka", franka_asset_file)
-            box_asset_file = self.cfg["env"]["asset"].get("assetFileNameBox", box_asset_file)
-            cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
-            sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
-            
+        self.rockList = []
+        d = {}
+
+      
+        for i in range(len(os.listdir("assets/rocks/urdf"))):            
+            rock_asset_file = os.path.join("rocks/urdf/",f"{i}.urdf")         
+            rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)  
+            rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
+            self.rockList.append(rock_asset)
+  
+
 
         # load franka asset
         asset_options = gymapi.AssetOptions()
+        asset_options.convex_decomposition_from_submeshes=False
         asset_options.flip_visual_attachments = True
         asset_options.fix_base_link = True
         asset_options.collapse_fixed_joints = True
@@ -171,6 +195,20 @@ class FrankaCabinet(VecTask):
         asset_options.thickness = 0.001
         asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
         asset_options.use_mesh_materials = True
+
+
+        if "asset" in self.cfg["env"]:
+            asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
+            franka_asset_file = self.cfg["env"]["asset"].get("assetFileNameFranka", franka_asset_file)
+            box_asset_file = self.cfg["env"]["asset"].get("assetFileNameBox", box_asset_file)
+            cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
+            sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
+            # rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)
+
+
+
+
+
         franka_asset = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
 
         franka_dof_stiffness = to_torch([400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6], dtype=torch.float, device=self.device)
@@ -220,12 +258,7 @@ class FrankaCabinet(VecTask):
         box_asset = self.gym.load_asset(self.sim, asset_root, box_asset_file)
         cyl_asset = self.gym.load_asset(self.sim, asset_root, cyl_asset_file)
         sphere_asset = self.gym.load_asset(self.sim, asset_root, sphere_asset_file)
-
-
-
-
-
-
+        # rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
 
 
         # compute aggregate size
@@ -242,6 +275,9 @@ class FrankaCabinet(VecTask):
         self.envs = []
         
         print("Iterating through environments")
+        tx = -spacing
+        ty= -spacing*3
+        
         for i in range(self.num_envs):
             # create env instance
             env_ptr = self.gym.create_env(
@@ -263,9 +299,53 @@ class FrankaCabinet(VecTask):
             if self.aggregate_mode == 1:
                 self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
+
+            print("env_ptr: ", env_ptr)
+
+
+
+
+            #Terrain generation
+            
+            if self.randTerrain:
+                terrain_width = spacing*2
+                terrain_length = spacing*2
+                horizontal_scale = 0.25  # [m]
+                vertical_scale = 0.005  # [m]
+                num_rows = int(terrain_width/horizontal_scale)
+                num_cols = int(terrain_length/horizontal_scale)
+                heightfield = np.zeros((num_rows, num_cols), dtype=np.int16)
+
+
+                subt=SubTerrain(width=num_rows, length=num_cols, vertical_scale=vertical_scale, horizontal_scale=horizontal_scale)
+
+
+                heightfield = random_uniform_terrain(subt, min_height=-0.2, max_height=0.0, step=0.01, downsampled_scale=0.5).height_field_raw
+
+                # add the terrain as a triangle mesh
+                vertices, triangles = convert_heightfield_to_trimesh(heightfield, horizontal_scale=horizontal_scale, vertical_scale=vertical_scale, slope_threshold=1.5)
+                tm_params = gymapi.TriangleMeshParams()
+                tm_params.nb_vertices = vertices.shape[0]
+                tm_params.nb_triangles = triangles.shape[0]
+                
+
+                if i % num_per_row == 0: 
+                    tx = -spacing
+                    ty += spacing*2
+                
+        
+                tm_params.transform.p.x = tx
+                tm_params.transform.p.y = ty
+
+            
+                self.gym.add_triangle_mesh(self.sim, vertices.flatten(), triangles.flatten(), tm_params)
+                tx += spacing*2
+            
+            
+            
+
             if self.num_props > 0:
                 self.prop_start.append(self.gym.get_sim_actor_count(self.sim))
-
 
 
                 props_per_row = int(np.ceil(np.sqrt(self.num_props)))
@@ -287,10 +367,10 @@ class FrankaCabinet(VecTask):
                         roll = 0
                         pitch = 0
                         yaw = 0
-                        prop_state_pose.p.x = 0.5 # drawer_pose.p.x + propx
-                        # propz, propy = 0, prop_up
-                        prop_state_pose.p.y = 0.0 #drawer_pose.p.y + propy
-                        prop_state_pose.p.z = 0.026 # drawer_pose.p.z + propz
+                        prop_state_pose.p.x = 0.5 
+                       
+                        prop_state_pose.p.y = 0.0 
+                        prop_state_pose.p.z = 0.026+0.014 
 
 
                         # Use random positioning?
@@ -299,7 +379,7 @@ class FrankaCabinet(VecTask):
                             prop_state_pose.p.x = randrange_float(0.40, 0.80, self.prop_spacing)
                             # propz, propy = 0, p
                             prop_state_pose.p.y = randrange_float(-0.50, 0.50, self.prop_spacing)
-                            prop_state_pose.p.z = 0.026
+                            
                             yaw = random.uniform(0.00000, 6.28318)
             
 
@@ -321,11 +401,15 @@ class FrankaCabinet(VecTask):
                             prop_actor = self.gym.create_actor(env_ptr, cyl_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         elif self.randProp == "sphere":
                             prop_actor = self.gym.create_actor(env_ptr, sphere_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
+                        elif self.randProp == "randRock":
+                            x = chooseProp(len(self.rockList)-1)
+                            prop_actor = self.gym.create_actor(env_ptr, self.rockList[x], prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         elif self.randProp == "rand":
-                            x = chooseProp()
+                            x = chooseProp(3)
                             if x==0: temp_asset=box_asset
                             elif x==1: temp_asset=cyl_asset
                             elif x==2: temp_asset=sphere_asset
+                            # elif x==3: temp_asset=rock_asset
                             prop_actor = self.gym.create_actor(env_ptr, temp_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
 
                         # xtra_actor = self.gym.create_actor(env_ptr, xtra_asset, prop_state_pose, "xtra{}".format(prop_count), i, 0, 0)
@@ -337,6 +421,8 @@ class FrankaCabinet(VecTask):
                         self.default_prop_states.append([prop_state_pose.p.x , prop_state_pose.p.y, prop_state_pose.p.z,
                                                          prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
                                                          0, 0, 0, 0, 0, 0])
+
+                        # self.gym.set_actor_scale(env_ptr, prop_actor, 0.035)                                   
                         
             if self.aggregate_mode > 0:
                 self.gym.end_aggregate(env_ptr)
@@ -574,6 +660,10 @@ class FrankaCabinet(VecTask):
                                                             prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
                                                             0, 0, 0, 0, 0, 0])
 
+                                                          
+
+
+
                             # if self.randProp == "rand":
                             #     x = chooseProp()
                             #     if x==0: temp_asset=box_asset
@@ -676,8 +766,8 @@ class FrankaCabinet(VecTask):
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
 
-def chooseProp():
-    return np.random.randint(0,3)
+def chooseProp(x):
+    return np.random.randint(0,x)
 
 
 #####################################################################
@@ -718,8 +808,12 @@ def compute_franka_reward(
     rewards = dist_reward + height_reward + grip_reward - time_penalty - finger_penalty
 
     
+
     reset_buf = torch.where(prop_grasp_pos[:, 2]>0.07, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
+
+    #reset if prop somehow falls down
+    reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
     return rewards, reset_buf
 
