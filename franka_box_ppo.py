@@ -64,23 +64,15 @@ env = wrap_env(env)
 
 device = env.device
 
-
 # Instantiate a RandomMemory as rollout buffer (any memory can be used for this)
 memory = RandomMemory(memory_size=16, num_envs=env.num_envs, device=device)
-
-
 
 # Instantiate the agent's models (function approximators).
 # PPO requires 2 models, visit its documentation for more details
 # https://skrl.readthedocs.io/en/latest/modules/skrl.agents.ppo.html#models-networks
-if tt:
-    networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
-                "value": Value(env.observation_space, env.action_space, device)}
-else:
-    networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
-                "value": None}
-    
 
+networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
+            "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
 
 if checkpoint:
     networks_ppo["policy"].load("./runs/million/checkpoints/1000000_policy.pt") 
@@ -90,7 +82,6 @@ else:
         network.init_parameters(method_name="normal_", mean=0.0, std=0.1) 
 
          
-
 
 # Configure and instantiate the agent.
 # Only modify some of the default configuration, visit its documentation to see all the options
@@ -109,20 +100,13 @@ cfg_ppo["policy_learning_rate"] = 5e-4   # policy learning rate
 cfg_ppo["value_learning_rate"] = 5e-4
 
 
-if tt:
-    agent = PPO(models=networks_ppo,
-                memory=memory, 
-                cfg=cfg_ppo, 
-                observation_space=env.observation_space, 
-                action_space=env.action_space,
-                device=device)
-else:
-    agent = PPO(models=networks_ppo,
-            memory=None, 
+agent = PPO(models=networks_ppo,
+            memory=(memory if tt else None), 
             cfg=cfg_ppo, 
             observation_space=env.observation_space, 
             action_space=env.action_space,
             device=device)
+
 
 # Configure and instantiate the RL trainer
 cfg_trainer = {"timesteps": 1000000, "headless": True}
