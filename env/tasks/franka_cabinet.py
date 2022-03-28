@@ -70,6 +70,7 @@ class FrankaCabinet(VecTask):
         self.randPos = self.cfg["env"]["randomPropPosition"]
         self.randProp = self.cfg["env"]["propSelect"]
         self.randTerrain = self.cfg["env"]["randTerrain"]
+        self.randFrankaPos = self.cfg["env"]["randStartPos"]
 
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
 
@@ -109,7 +110,9 @@ class FrankaCabinet(VecTask):
         self.reward_state = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
 
         # create some wrapper tensors for different slices
-        self.franka_default_dof_pos = to_torch([0, 0, 0, -1.0, 0, 1.1, 0.0, 0.035, 0.035], device=self.device)
+
+        self.franka_default_dof_pos = to_torch([0, 0, 0, -1.0, 0, 1.1, 0.0, 0.035, 0.035], device=self.device) 
+        
         self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)
         self.franka_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, :self.num_franka_dofs]
         self.franka_dof_pos = self.franka_dof_state[..., 0]
@@ -562,10 +565,14 @@ class FrankaCabinet(VecTask):
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
         
-        # reset franka
+
         pos = tensor_clamp(
-            self.franka_default_dof_pos.unsqueeze(0) + 0.25 * (torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
+            self.franka_default_dof_pos.unsqueeze(0) + self.randFrankaPos * (torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
+
+        # print("pos: ", pos)
+
+        # print("what to change: ", self.franka_dof_pos[env_ids, :])
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
