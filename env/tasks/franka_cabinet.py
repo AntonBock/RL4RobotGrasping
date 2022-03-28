@@ -143,7 +143,7 @@ class FrankaCabinet(VecTask):
         self.sim_params.up_axis = gymapi.UP_AXIS_Z
         self.sim_params.gravity.x = 0
         self.sim_params.gravity.y = 0
-        self.sim_params.gravity.z = -9.81
+        self.sim_params.gravity.z = -9.8164 #Gravity in Suldrup, DK. Source: https://www.space.dtu.dk/english/-/media/Institutter/Space/English/reports/technical_reports/tech_no_6.ashx, page 7
         self.sim = super().create_sim(
             self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
             
