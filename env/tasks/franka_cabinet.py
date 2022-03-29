@@ -777,28 +777,28 @@ def compute_franka_reward(
     finger_penalty = torch.where(finger_dist<0.03, 0.1, 0.0)
 
     #One time rewards
-    reward = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, 0), 0)
-    reward_state = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, reward_state), reward_state)
+    # reward = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, 0), 0)
+    # reward_state = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, reward_state), reward_state)
     
-    reward = torch.where(reward_state == 1, torch.where(d <= 0.1, 7, 0), 0)
-    reward_state = torch.where(reward_state == 1, torch.where(d <= 0.1, 2, reward_state), reward_state)
+    # reward = torch.where(reward_state == 1, torch.where(d <= 0.1, 7, 0), 0)
+    # reward_state = torch.where(reward_state == 1, torch.where(d <= 0.1, 2, reward_state), reward_state)
 
-    reward = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 49, 0), 0)
-    reward_state = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 3, reward_state), reward_state)
+    # reward = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 49, 0), 0)
+    # reward_state = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 3, reward_state), reward_state)
 
     #Continuous reward
-    # dist_reward = 1.0 / (1.0 + d ** 2)
-    # dist_reward *= dist_reward
-    # dist_reward = torch.where(d <= 0.06, dist_reward*5.0, dist_reward)
+    dist_reward = 1.0 / (1.0 + d ** 2)
+    dist_reward *= dist_reward
+    dist_reward = torch.where(d <= 0.06, dist_reward*5.0, dist_reward)
 
-    # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
-    # dist_reward = torch.where(d <= 0.06, 10, 0)
+    close_reward = torch.where(d <= 0.3, 1.0, 0.0)
+    dist_reward = torch.where(d <= 0.06, 10, 0)
     height_reward = torch.where(prob_height>0.07, prob_height*100, 0)
     height_reward = torch.where(prob_height>0.15, 1000, 0)
         
-    #grip_reward = grip_forces * 10
+    grip_reward = grip_forces * 10
 
-    rewards = reward + height_reward - time_penalty - finger_penalty
+    rewards = dist_reward + close_reward + grip_reward + height_reward - time_penalty - finger_penalty # reward
 
     reset_buf = torch.where(prob_height>0.15, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
