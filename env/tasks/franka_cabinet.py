@@ -166,7 +166,18 @@ class FrankaCabinet(VecTask):
     def _create_envs(self, num_envs, spacing, num_per_row):
         print("Creating envs")
 
-        print("Num pr row: ", num_per_row)
+        # gymapi.PlaneParams.dynamic_friction = 100
+        # gymapi.PlaneParams.static_friction = 100
+        # gymapi.RigidShapeProperties.rolling_friciton = 10000
+        # gymapi.RigidContact.rolling_friciton = 10000
+
+        # hfParams = gymapi.HeightFieldParams
+
+        # hfParams.dynamic_friction = 1000
+        # hfParams.static_friction = 1000
+
+
+        # print("Num pr row: ", num_per_row)
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
@@ -342,6 +353,10 @@ class FrankaCabinet(VecTask):
                 tm_params = gymapi.TriangleMeshParams()
                 tm_params.nb_vertices = vertices.shape[0]
                 tm_params.nb_triangles = triangles.shape[0]
+
+                #Friction for ground plane
+                # tm_params.dynamic_friction = 0.01
+                # tm_params.static_friction = 0.01
                 
 
                 if i % num_per_row == 0: 
