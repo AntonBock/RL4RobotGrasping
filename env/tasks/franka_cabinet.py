@@ -187,6 +187,7 @@ class FrankaCabinet(VecTask):
         for i in range(len(os.listdir("assets/rocks/urdf"))):            
             rock_asset_file = os.path.join("rocks/urdf/",f"{i}.urdf")         
             rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)  
+
             rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
             self.rockList.append(rock_asset)
   

@@ -12,8 +12,8 @@ from skrl.trainers.torch import SequentialTrainer
 from skrl.envs.torch import wrap_env
 from skrl.envs.torch import load_isaacgym_env_preview2, load_isaacgym_env_preview3
 
-tt = True
-checkpoint = False
+tt = False
+checkpoint = True
 
 # Define the models (stochastic and deterministic models) for the agent using helper classes 
 # and programming with two approaches (layer by layer and torch.nn.Sequential class).
@@ -75,7 +75,7 @@ networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device
             "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
 
 if checkpoint:
-    networks_ppo["policy"].load("./runs/million/checkpoints/1000000_policy.pt") 
+    networks_ppo["policy"].load("./runs/300K_all_random/checkpoints/300000_policy.pt") 
 else:
     # Initialize the models' parameters (weights and biases) using a Gaussian distribution
     for network in networks_ppo.values():
