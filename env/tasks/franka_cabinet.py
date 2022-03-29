@@ -166,22 +166,9 @@ class FrankaCabinet(VecTask):
     def _create_envs(self, num_envs, spacing, num_per_row):
         print("Creating envs")
 
-        # gymapi.PlaneParams.dynamic_friction = 100
-        # gymapi.PlaneParams.static_friction = 100
-        # gymapi.RigidShapeProperties.rolling_friciton = 10000
-        # gymapi.RigidContact.rolling_friciton = 10000
-
-        # hfParams = gymapi.HeightFieldParams
-
-        # hfParams.dynamic_friction = 1000
-        # hfParams.static_friction = 1000
-
-
-        # print("Num pr row: ", num_per_row)
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
-        
 
         asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets")
         franka_asset_file = "urdf/franka_description/robots/franka_panda.urdf"
@@ -264,10 +251,6 @@ class FrankaCabinet(VecTask):
         franka_dof_props['effort'][7] = 200
         franka_dof_props['effort'][8] = 200
 
-        # create prop assets
-        # box_opts = gymapi.AssetOptions()
-        # box_opts.density = 400
-        # prop_asset = self.gym.create_box(self.sim, self.prop_width, self.prop_height, self.prop_width, box_opts)
 
         franka_start_pose = gymapi.Transform()
         franka_start_pose.p = gymapi.Vec3(1.0, 0.0, 0.0)
