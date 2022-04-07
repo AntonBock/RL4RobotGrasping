@@ -97,7 +97,7 @@ class Cartpole(VecTask):
         print(f"Size of layer: {sizeLayer}")
         sizeLayer = layer_dim(4, 2, sizeLayer)
         print(f"Size of layer: {sizeLayer}")
-        sizeLayer = layer_dim(4, 2, sizeLayer)
+        sizeLayer = layer_dim(3, 1, sizeLayer)
         print(f"Size of layer: {sizeLayer}")
 
 
@@ -211,7 +211,7 @@ class Cartpole(VecTask):
         #torch.set_printoptions(profile="full")
         
         full_tensor = torch.stack((self.cam_tensors), 0)
-        full_tensor[full_tensor < -2] = 200
+        full_tensor[full_tensor < -2] = 0
         #print(f"full tensor shape: {full_tensor.shape}")
         #print(f"full tensor: {full_tensor}")
 
@@ -219,7 +219,7 @@ class Cartpole(VecTask):
         #print(f"camera image: {full_img}")
         #extra_data = torch.ones(self.num_envs, 1, dtype=torch.float32, device=self.device)*3.2
         #print(extra_data.shape)
-        camera_data = torch.reshape(full_tensor, (self.num_envs, self.cam_height*self.cam_width)).float()
+        camera_data = torch.reshape(full_tensor, (self.num_envs, self.cam_height*self.cam_width))
         #print(camera_data.shape)
         self.obs_buf = torch.cat((camera_data, self.dof_pos, self.dof_vel), 1)
 
