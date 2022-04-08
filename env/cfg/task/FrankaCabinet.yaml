@@ -19,9 +19,9 @@ env:
 
   randStartPos: ${resolve_default:0.25,${...randness}} #standard: 0.25
   randDynamics: False
-  randTerrain: True
-  randomPropPosition: True
-  propSelect: ${resolve_default:"box",${...prop_sel}}
+  randTerrain: False
+  randomPropPosition: False
+  propSelect: ${resolve_default:"box",${...prop_sel}} #box, randRock
   numProps: 1
   aggregateMode: 3
 
