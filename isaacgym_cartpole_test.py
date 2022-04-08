@@ -86,7 +86,7 @@ cfg_ppo["value_loss_scale"] = 2.0
 cfg_ppo["experiment"]["write_interval"] = 16
 cfg_ppo["experiment"]["checkpoint_interval"] = 1000
 
-agent = PPO(networks=networks_ppo,
+agent = PPO(models=networks_ppo,
             memory=memory, 
             cfg=cfg_ppo, 
             observation_space=env.observation_space, 

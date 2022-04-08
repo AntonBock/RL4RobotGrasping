@@ -82,10 +82,10 @@ class Cartpole(VecTask):
         self.cam_pixels = self.cam_width*self.cam_height
 
         self.non_cam_observations = 0
-        self.cfg["env"]["numObservations"] = self.cam_height*self.cam_width
+        self.cfg["env"]["numObservations"] = self.cam_height*self.cam_width+4
         self.cfg["env"]["numActions"] = 1
 
-        super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=False)
+        super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=True)
 
 
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
@@ -93,7 +93,7 @@ class Cartpole(VecTask):
         self.dof_pos = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 0]
         self.dof_vel = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 1]
 
-        sizeLayer = layer_dim(8, 4, 64)
+        sizeLayer = layer_dim(8, 4, self.cam_width)
         print(f"Size of layer: {sizeLayer}")
         sizeLayer = layer_dim(4, 2, sizeLayer)
         print(f"Size of layer: {sizeLayer}")
@@ -169,6 +169,7 @@ class Cartpole(VecTask):
             cam_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env_ptr, camera_handle, gymapi.IMAGE_DEPTH)
             torch_cam_tensor = gymtorch.wrap_tensor(cam_tensor)
             self.cam_tensors.append(torch_cam_tensor)
+       
 
     def compute_reward(self, env_ids=None):
         if env_ids is None:
@@ -195,7 +196,7 @@ class Cartpole(VecTask):
         
         # frame_no = self.gym.get_frame_count(self.sim)
         # for i in env_ids:
-        #     if frame_no % 200 == 0:
+        #     if frame_no % 100 == 0:
         #         img_dir = "images"
         #         if not os.path.exists(img_dir):
         #             os.mkdir(img_dir)
@@ -208,15 +209,19 @@ class Cartpole(VecTask):
 
         #torch.set_printoptions(edgeitems=3)
         #torch.set_printoptions(profile="full")
+        
         full_tensor = torch.stack((self.cam_tensors), 0)
-        full_tensor[full_tensor < -2] = 200
-
+        full_tensor[full_tensor < -2] = 0
         #print(f"full tensor shape: {full_tensor.shape}")
         #print(f"full tensor: {full_tensor}")
 
         #full_img = torch.reshape(full_img, (self.num_envs,self.cam_pixels))
         #print(f"camera image: {full_img}")
-        self.obs_buf = torch.reshape(full_tensor, (self.num_envs, self.num_obs)).float()
+        #extra_data = torch.ones(self.num_envs, 1, dtype=torch.float32, device=self.device)*3.2
+        #print(extra_data.shape)
+        camera_data = torch.reshape(full_tensor, (self.num_envs, self.cam_height*self.cam_width))
+        #print(camera_data.shape)
+        self.obs_buf = torch.cat((camera_data, self.dof_pos, self.dof_vel), 1)
 
         self.gym.end_access_image_tensors(self.sim)
         

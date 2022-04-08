@@ -6,7 +6,7 @@ physics_engine: ${..physics_engine}
 
 # if given, will override the device setting in gym. 
 env:
-  numEnvs: ${resolve_default:1024,${...num_envs}}
+  numEnvs: ${resolve_default:128,${...num_envs}}
   envSpacing: 1.5
   episodeLength: 200
   enableDebugVis: False
@@ -39,6 +39,8 @@ env:
 
   # set to True if you use camera sensors in the environment
   enableCameraSensors: False
+  # Set to true if you want saved images
+  saveImages: False
 
 sim:
   dt: 0.0166 # 1/60

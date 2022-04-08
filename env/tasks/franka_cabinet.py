@@ -30,12 +30,11 @@ import numpy as np
 import os
 import torch
 import random
+import imageio
 
 from isaacgym import gymutil, gymtorch, gymapi
 from isaacgym.torch_utils import *
 from tasks.base.vec_task import VecTask
-
-
 
 from numpy.random import choice
 from numpy.random.mtrand import triangular
@@ -73,6 +72,8 @@ class FrankaCabinet(VecTask):
         self.randFrankaPos = self.cfg["env"]["randStartPos"]
 
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
+        self.using_camera = self.cfg["env"]["enableCameraSensors"]
+        self.img_save = self.cfg["env"]["saveImages"]
 
         self.up_axis = "z"
         self.up_axis_idx = 2
@@ -80,27 +81,26 @@ class FrankaCabinet(VecTask):
         self.distX_offset = 0.04
         self.dt = 1/60.
 
-        
-
         # prop dimensions
         self.prop_width = 0.05
         self.prop_height = 0.05
         self.prop_length = 0.05
         self.prop_spacing = 0.06
 
-        num_obs = 22
-        num_acts = 9
+        self.cam_width = 64
+        self.cam_height = 64
+        self.cam_pixels = self.cam_width*self.cam_height
+        self.non_cam_observations = 19
 
-        self.cfg["env"]["numObservations"] = 22
+        self.cfg["env"]["numObservations"] = self.cam_pixels + self.non_cam_observations if self.using_camera else 22
         self.cfg["env"]["numActions"] = 9
 
-        super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
+        super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=True)
 
         # get gym GPU state tensors
         actor_root_state_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
         rigid_body_tensor = self.gym.acquire_rigid_body_state_tensor(self.sim)
-
 
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
@@ -158,8 +158,6 @@ class FrankaCabinet(VecTask):
             plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
             self.gym.add_ground(self.sim, plane_params)
             print("Finished creating ground plane")
-        
-    
 
 
     def _create_envs(self, num_envs, spacing, num_per_row):
@@ -279,6 +277,8 @@ class FrankaCabinet(VecTask):
         self.default_prop_states = []
         self.prop_start = []
         self.envs = []
+        self.cams = []
+        self.cam_tensors = []
         
         print("Iterating through environments")
         tx = -spacing
@@ -417,8 +417,19 @@ class FrankaCabinet(VecTask):
                                                          prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
                                                          0, 0, 0, 0, 0, 0])
 
-                        # self.gym.set_actor_scale(env_ptr, prop_actor, 0.035)                                   
-                        
+                        # self.gym.set_actor_scale(env_ptr, prop_actor, 0.035) 
+                                                          
+            #Camera setup
+            camera_prop = self.camera_prop_setup()
+            camera_handle = self.gym.create_camera_sensor(env_ptr, camera_prop)
+            self.cams.append(camera_handle)
+            self.gym.set_camera_location(camera_handle, env_ptr, gymapi.Vec3(0.2, 0.0, 0.4), gymapi.Vec3(1.0, 0.0, 0.0))
+
+            # wrap camera tensor in a pytorch tensor
+            cam_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env_ptr, camera_handle, gymapi.IMAGE_DEPTH)
+            torch_cam_tensor = gymtorch.wrap_tensor(cam_tensor)
+            self.cam_tensors.append(torch_cam_tensor)
+
             if self.aggregate_mode > 0:
                 self.gym.end_aggregate(env_ptr)
 
@@ -438,6 +449,7 @@ class FrankaCabinet(VecTask):
         print("Finished creating environments")
         
         self.init_data()
+
 
     def init_data(self):
         print("Initialising data")
@@ -503,20 +515,28 @@ class FrankaCabinet(VecTask):
         self.franka_rfinger_rot = torch.zeros_like(self.franka_local_grasp_rot)
         print("Finished initialising data")
 
+
     def compute_reward(self, actions):
  
         self.gym.refresh_net_contact_force_tensor(self.sim)
         _force_vec = self.gym.acquire_net_contact_force_tensor(self.sim)
         force_vec = gymtorch.wrap_tensor(_force_vec)
         force_vec = force_vec.view(-1, 11, 3)
+        _force_vec_franka = force_vec[:, :10]
         _force_vec_left = force_vec.select(1, 8)
         _force_vec_right = force_vec.select(1, 9)
 
-        force_tens = torch.where(torch.norm(abs(_force_vec_left)-abs(_force_vec_right), p=2, dim=-1) < 1, 1.0, 0.0)
-        force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) > 5, 
-                        torch.where(torch.norm(_force_vec_right, p=2, dim=-1) > 5, force_tens.double(), 0.0), 0.0)
-        force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) < 70, 
-                        torch.where(torch.norm(_force_vec_right, p=2, dim=-1) < 70, force_tens.double(), -0.01), -0.01)
+        left_n = torch.nn.functional.normalize(_force_vec_left, dim=-1, p=2)
+        right_n = torch.nn.functional.normalize(_force_vec_right, dim=-1, p=2)
+
+        force_ang = torch.acos(torch.diagonal(torch.tensordot(left_n, right_n, dims=([1], [1]))))
+    
+        grip_tens = torch.where(force_ang > 2.8, 1, 0)
+        grip_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) > 5, 
+                     torch.where(torch.norm(_force_vec_right, p=2, dim=-1) > 5, grip_tens, 0), 0)
+
+        collision_tens = torch.where(torch.norm(_force_vec_franka, p=2, dim=-1) > 100, 0, 1)
+        collision_tens = torch.all(collision_tens, 1)
 
         self.rew_buf[:], self.reset_buf[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
@@ -524,9 +544,9 @@ class FrankaCabinet(VecTask):
             self.franka_lfinger_pos, self.franka_rfinger_pos,
             self.gripper_forward_axis, self.prop_inward_axis, self.gripper_up_axis, self.prop_up_axis,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale, self.height_reward_scale,
-            self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, force_tens, self.reward_state
+            self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, grip_tens, collision_tens, self.reward_state
         )
-        # print("Finished computing reward")
+
 
     def compute_observations(self):
 
@@ -551,14 +571,26 @@ class FrankaCabinet(VecTask):
 
         dof_pos_scaled = (2.0 * (self.franka_dof_pos - self.franka_dof_lower_limits)
                           / (self.franka_dof_upper_limits - self.franka_dof_lower_limits) - 1.0)
+        
+        if self.using_camera:
+            self.gym.render_all_camera_sensors(self.sim)
+            self.gym.start_access_image_tensors(self.sim)
 
-        testArray = np.zeros([16,4])
-        to_target = self.prop_grasp_pos - self.franka_grasp_pos # Distance to target
-        self.obs_buf = torch.cat((dof_pos_scaled, self.franka_dof_vel * self.dof_vel_scale, to_target, self.prop_grasp_pos[:, 2].unsqueeze(-1)), dim=-1) #self.prop_dof_vel[:, 3].unsqueeze(-1)),
+            if self.img_save: self.save_images()
 
-        # print("Box position: ", prop_pos)
-        # print("Finished computing observations")
+            img_tensor= torch.stack((self.cam_tensors), 0)  # combine images
+            img_tensor[img_tensor < -2] = 0 # remove faraway data
+            img_tensor = img_tensor*100
+
+            camera_data = torch.reshape(img_tensor, (self.num_envs, self.cam_pixels))
+            self.obs_buf= torch.cat((camera_data, dof_pos_scaled, self.franka_dof_vel * self.dof_vel_scale, self.franka_grasp_pos[:, 2].unsqueeze(-1)), 1)
+            self.gym.end_access_image_tensors(self.sim)
+        else:
+            to_target = self.prop_grasp_pos - self.franka_grasp_pos # Distance to target
+            self.obs_buf = torch.cat((dof_pos_scaled, self.franka_dof_vel * self.dof_vel_scale, to_target, self.prop_grasp_pos[:, 2].unsqueeze(-1)), dim=-1) #self.prop_dof_vel[:, 3].unsqueeze(-1))
+
         return self.obs_buf
+
 
     def reset_idx(self, env_ids):
         # print("Running reset_idx")
@@ -663,11 +695,10 @@ class FrankaCabinet(VecTask):
         self.reward_state[env_ids] = 0
         self.progress_buf[env_ids] = 0
         self.reset_buf[env_ids] = 0
-        # print("Finished reset_idx")
+
 
     def pre_physics_step(self, actions):
-        # print("Pre_physx")
-        # print("Prop_grasp_pos: ", self.prop_grasp_pos)
+        num_not_grip_dofs = self.num_franka_dofs-2
         self.actions = actions.clone().to(self.device)
         targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * self.actions * self.action_scale
         self.franka_dof_targets[:, :self.num_franka_dofs] = tensor_clamp(
@@ -675,8 +706,7 @@ class FrankaCabinet(VecTask):
         env_ids_int32 = torch.arange(self.num_envs, dtype=torch.int32, device=self.device)
         self.gym.set_dof_position_target_tensor(self.sim,
                                                 gymtorch.unwrap_tensor(self.franka_dof_targets))
-        # print("Prop grasp_pos: ", self.prop_grasp_pos[0])
-        # print("Finished Pre_physx")
+
 
     def post_physics_step(self):
         self.progress_buf += 1
@@ -732,11 +762,40 @@ class FrankaCabinet(VecTask):
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], pz[0], pz[1], pz[2]], [0, 0, 1])
 
 
+    def set_gripper(self, gripper_action):
+        gripper_state = torch.where(gripper_action <= 0.0,-1.0,1.0)
+
+
+    def save_images(self):
+        frame_no = self.gym.get_frame_count(self.sim)
+        for i in range(self.num_envs):
+            if frame_no % 100 == 0:
+                img_dir = "images"
+                if not os.path.exists(img_dir):
+                    os.mkdir(img_dir)
+
+                cam_img = self.cam_tensors[i].cpu().numpy()
+                cam_img[cam_img < -2] = 0
+                cam_img= cam_img*100
+                fname = os.path.join(img_dir, "cam-%04d-%04d.png" % (frame_no, i))
+                imageio.imwrite(fname, cam_img)
+
+
+    def camera_prop_setup(self):
+        camera_props = gymapi.CameraProperties()
+        camera_props.width = self.cam_width
+        camera_props.height = self.cam_height
+        camera_props.enable_tensors = True
+        return camera_props
+
+
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
 
+
 def chooseProp(x):
     return np.random.randint(0,x)
+
 
 
 #####################################################################
@@ -750,9 +809,9 @@ def compute_franka_reward(
     franka_lfinger_pos, franka_rfinger_pos,
     gripper_forward_axis, prop_inward_axis, gripper_up_axis, prop_up_axis,
     num_envs, dist_reward_scale, rot_reward_scale, around_handle_reward_scale, height_reward_scale,
-    finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip_forces, reward_state
+    finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip, collision, reward_state
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor) -> Tuple[Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor]
 
     # distance from hand to the drawer
     d = torch.norm(franka_grasp_pos - prop_grasp_pos, p=2, dim=-1)
@@ -766,28 +825,28 @@ def compute_franka_reward(
     finger_penalty = torch.where(finger_dist<0.03, 0.1, 0.0)
 
     #One time rewards
-    reward = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, 0), 0)
-    reward_state = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, reward_state), reward_state)
+    # reward = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, 0), 0)
+    # reward_state = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, reward_state), reward_state)
     
-    reward = torch.where(reward_state == 1, torch.where(d <= 0.1, 7, 0), 0)
-    reward_state = torch.where(reward_state == 1, torch.where(d <= 0.1, 2, reward_state), reward_state)
+    # reward = torch.where(reward_state == 1, torch.where(d <= 0.1, 7, 0), 0)
+    # reward_state = torch.where(reward_state == 1, torch.where(d <= 0.1, 2, reward_state), reward_state)
 
-    reward = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 49, 0), 0)
-    reward_state = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 3, reward_state), reward_state)
+    # reward = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 49, 0), 0)
+    # reward_state = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 3, reward_state), reward_state)
 
     #Continuous reward
-    # dist_reward = 1.0 / (1.0 + d ** 2)
-    # dist_reward *= dist_reward
-    # dist_reward = torch.where(d <= 0.06, dist_reward*5.0, dist_reward)
+    dist_reward = 1.0 / (1.0 + d ** 2)
+    dist_reward *= dist_reward
+    dist_reward = torch.where(d <= 0.06, dist_reward*2.0, dist_reward)
 
     # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
     # dist_reward = torch.where(d <= 0.06, 10, 0)
     height_reward = torch.where(prob_height>0.07, prob_height*100, 0)
     height_reward = torch.where(prob_height>0.15, 1000, 0)
         
-    #grip_reward = grip_forces * 10
+    grip_reward = grip * 10
 
-    rewards = reward + height_reward - time_penalty - finger_penalty
+    rewards = dist_reward + height_reward + grip_reward - time_penalty - finger_penalty
 
     reset_buf = torch.where(prob_height>0.15, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
