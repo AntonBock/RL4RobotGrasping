@@ -526,11 +526,11 @@ class FrankaCabinet(VecTask):
         _force_vec_left = force_vec.select(1, 8)
         _force_vec_right = force_vec.select(1, 9)
 
-        force_tens = torch.where(torch.norm(abs(_force_vec_left)-abs(_force_vec_right), p=2, dim=-1) < 1, 1.0, 0.0)
+        force_tens = torch.where(torch.norm(abs(_force_vec_left)-abs(_force_vec_right), p=2, dim=-1) < 2, 1.0, 0.0)
         force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) > 5, 
                         torch.where(torch.norm(_force_vec_right, p=2, dim=-1) > 5, force_tens.double(), 0.0), 0.0)
-        force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) < 70, 
-                        torch.where(torch.norm(_force_vec_right, p=2, dim=-1) < 70, force_tens.double(), -0.01), -0.01)
+        force_tens = torch.where(torch.norm(_force_vec_left, p=2, dim=-1) < 150, 
+                        torch.where(torch.norm(_force_vec_right, p=2, dim=-1) < 150, force_tens.double(), -0.1), -0.1)
 
         self.rew_buf[:], self.reset_buf[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
@@ -789,16 +789,14 @@ def compute_franka_reward(
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.06, dist_reward*5.0, dist_reward)
 
-    close_reward = torch.where(d <= 0.3, 1.0, 0.0)
-    dist_reward = torch.where(d <= 0.06, 10, 0)
-    height_reward = torch.where(prob_height>0.07, prob_height*100, 0)
-    height_reward = torch.where(prob_height>0.15, 1000, 0)
+    height_reward = torch.where(prob_height>0.10, 1000, prob_height*10)
+    height_reward = torch.where(prob_height>0.20, 0, 0)
         
     grip_reward = grip_forces * 10
 
-    rewards = dist_reward + close_reward + grip_reward + height_reward - time_penalty - finger_penalty # reward
+    rewards = dist_reward + grip_reward + height_reward - time_penalty - finger_penalty # reward
 
-    reset_buf = torch.where(prob_height>0.15, torch.ones_like(reset_buf), reset_buf)
+    # reset_buf = torch.where(prob_height>0.15, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
 
     #reset if prop somehow falls down

@@ -75,7 +75,7 @@ networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device
             "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
 
 if checkpoint:
-    networks_ppo["policy"].load("./runs/300K_all_random/checkpoints/300000_policy.pt") 
+    networks_ppo["policy"].load("./runs/long/checkpoints/268000_policy.pt") 
 else:
     # Initialize the models' parameters (weights and biases) using a Gaussian distribution
     for network in networks_ppo.values():
