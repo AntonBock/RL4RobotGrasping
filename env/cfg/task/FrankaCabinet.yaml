@@ -17,10 +17,10 @@ env:
   startPositionNoise: 0.0
   startRotationNoise: 0.0
 
-  randStartPos: ${resolve_default:0.25,${...randness}} #standard: 0.25
+  randStartPos: 0.00 #standard: 0.25
   randDynamics: False
   randTerrain: True
-  randomPropPosition: True
+  randomPropPosition: False
   propSelect: ${resolve_default:"box",${...prop_sel}}
   numProps: 1
   aggregateMode: 3

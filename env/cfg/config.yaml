@@ -6,8 +6,8 @@ experiment: ''
 
 # if set to positive integer, overrides the default number of environments
 num_envs: ''
-prop_sel: "box"
-randness: 0.25
+prop_sel: ''
+#randness: 0.25
 
 # seed - set to -1 to choose random seed
 seed: 42

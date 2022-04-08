@@ -329,7 +329,7 @@ class FrankaCabinet(VecTask):
                 subt=SubTerrain(width=num_rows, length=num_cols, vertical_scale=vertical_scale, horizontal_scale=horizontal_scale)
 
 
-                heightfield = random_uniform_terrain(subt, min_height=-0.2, max_height=0.0, step=0.01, downsampled_scale=0.5).height_field_raw
+                heightfield = random_uniform_terrain(subt, min_height=-0.2, max_height=0.0, step=0.01, downsampled_scale=0.5).height_field_raw #ds=0.5
 
                 # add the terrain as a triangle mesh
                 vertices, triangles = convert_heightfield_to_trimesh(heightfield, horizontal_scale=horizontal_scale, vertical_scale=vertical_scale, slope_threshold=1.5)
@@ -337,7 +337,7 @@ class FrankaCabinet(VecTask):
                 tm_params.nb_vertices = vertices.shape[0]
                 tm_params.nb_triangles = triangles.shape[0]
 
-                #Friction for ground plane
+                # #Friction for ground plane
                 # tm_params.dynamic_friction = 0.01
                 # tm_params.static_friction = 0.01
                 
