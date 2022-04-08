@@ -691,8 +691,7 @@ class FrankaCabinet(VecTask):
 
 
     def pre_physics_step(self, actions):
-        # print("Pre_physx")
-        # print("Prop_grasp_pos: ", self.prop_grasp_pos)
+        num_not_grip_dofs = self.num_franka_dofs-2
         self.actions = actions.clone().to(self.device)
         targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * self.actions * self.action_scale
         self.franka_dof_targets[:, :self.num_franka_dofs] = tensor_clamp(
@@ -754,6 +753,10 @@ class FrankaCabinet(VecTask):
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], px[0], px[1], px[2]], [1, 0, 0])
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], py[0], py[1], py[2]], [0, 1, 0])
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], pz[0], pz[1], pz[2]], [0, 0, 1])
+
+
+    def set_gripper(self, gripper_action):
+        gripper_state = torch.where(gripper_action <= 0.0,-1.0,1.0)
 
 
     def save_images(self):
