@@ -95,7 +95,7 @@ class FrankaCabinet(VecTask):
         self.cfg["env"]["numObservations"] = self.cam_pixels + self.non_cam_observations if self.using_camera else 22
         self.cfg["env"]["numActions"] = 9
 
-        super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=True)
+        super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
 
         # get gym GPU state tensors
         actor_root_state_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
