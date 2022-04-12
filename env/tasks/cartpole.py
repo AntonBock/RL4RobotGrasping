@@ -85,7 +85,7 @@ class Cartpole(VecTask):
         self.cfg["env"]["numObservations"] = self.cam_height*self.cam_width+4
         self.cfg["env"]["numActions"] = 1
 
-        super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=True)
+        super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
 
 
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)

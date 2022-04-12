@@ -109,7 +109,7 @@ agent = PPO(models=networks_ppo,
 
 
 # Configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 1000000, "headless": True}
+cfg_trainer = {"timesteps": 1000000, "progress_interval": 1000}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
 # start training
