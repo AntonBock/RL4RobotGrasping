@@ -597,7 +597,6 @@ class FrankaCabinet(VecTask):
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
         
-
         pos = tensor_clamp(
             self.franka_default_dof_pos.unsqueeze(0) + self.randFrankaPos * (torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
@@ -700,10 +699,13 @@ class FrankaCabinet(VecTask):
     def pre_physics_step(self, actions):
         num_not_grip_dofs = self.num_franka_dofs-2
         self.actions = actions.clone().to(self.device)
-        targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * self.actions * self.action_scale
-        self.franka_dof_targets[:, :self.num_franka_dofs] = tensor_clamp(
-            targets, self.franka_dof_lower_limits, self.franka_dof_upper_limits)
-        env_ids_int32 = torch.arange(self.num_envs, dtype=torch.int32, device=self.device)
+        self.set_gripper(self.actions[:, num_not_grip_dofs:])
+        
+        targets = self.franka_dof_targets[:, :num_not_grip_dofs] + self.franka_dof_speed_scales[ :num_not_grip_dofs] * self.dt * self.actions[:, :num_not_grip_dofs] * self.action_scale
+
+        self.franka_dof_targets[:, :num_not_grip_dofs] = tensor_clamp(
+            targets, self.franka_dof_lower_limits[:num_not_grip_dofs], self.franka_dof_upper_limits[:num_not_grip_dofs])
+        
         self.gym.set_dof_position_target_tensor(self.sim,
                                                 gymtorch.unwrap_tensor(self.franka_dof_targets))
 
@@ -763,8 +765,10 @@ class FrankaCabinet(VecTask):
 
 
     def set_gripper(self, gripper_action):
-        gripper_state = torch.where(gripper_action <= 0.0,-1.0,1.0)
-
+        gripper_state = torch.where(gripper_action <= 0.0, 0.0, 0.04)
+        self.franka_dof_targets[:, 7:] = gripper_state
+        grib_target = self.franka_dof_targets[:, 7:] + self.franka_dof_speed_scales[7:] * self.dt
+        self.franka_dof_targets[:, 7:] = tensor_clamp(grib_target, self.franka_dof_lower_limits[7:], self.franka_dof_upper_limits[7:])
 
     def save_images(self):
         frame_no = self.gym.get_frame_count(self.sim)
@@ -844,9 +848,9 @@ def compute_franka_reward(
     height_reward = torch.where(prob_height>0.07, prob_height*100, 0)
     height_reward = torch.where(prob_height>0.15, 1000, 0)
         
-    grip_reward = grip * 10
+    grip_reward = torch.where(finger_dist>0.02, grip*100, 0)
 
-    rewards = dist_reward + height_reward + grip_reward - time_penalty - finger_penalty
+    rewards = dist_reward + grip_reward
 
     reset_buf = torch.where(prob_height>0.15, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
