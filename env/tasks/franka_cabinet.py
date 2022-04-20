@@ -518,7 +518,7 @@ class FrankaCabinet(VecTask):
         print("Finished initialising data")
 
     def compute_reward(self, actions):
- 
+        print("Compute reward")
         self.gym.refresh_net_contact_force_tensor(self.sim)
         _force_vec = self.gym.acquire_net_contact_force_tensor(self.sim)
         force_vec = gymtorch.wrap_tensor(_force_vec)
@@ -543,6 +543,7 @@ class FrankaCabinet(VecTask):
         # print("Finished computing reward")
 
     def compute_observations(self):
+        print ("Compute observation")
 
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
@@ -575,7 +576,7 @@ class FrankaCabinet(VecTask):
         return self.obs_buf
 
     def reset_idx(self, env_ids):
-        # print("Running reset_idx")
+        print("Running reset_idx")
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
         pos = tensor_clamp(
@@ -675,7 +676,7 @@ class FrankaCabinet(VecTask):
         # print("Finished reset_idx")
 
     def pre_physics_step(self, actions):
-        # print("Pre_physx")
+        print("Pre_physx")
         # print("Prop_grasp_pos: ", self.prop_grasp_pos)
         self.actions = actions.clone().to(self.device)
         targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * self.actions * self.action_scale
@@ -688,9 +689,16 @@ class FrankaCabinet(VecTask):
         # print("Finished Pre_physx")
 
     def post_physics_step(self):
+        print("Post Physics")
         self.progress_buf += 1
 
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
+
+
+        print("        ")
+        print("Look:", env_ids)
+        print("        ")
+
         if len(env_ids) > 0:
             self.reset_idx(env_ids)
 
