@@ -820,7 +820,7 @@ def compute_franka_reward(
     prob_height = prob_height.double()
     # Time penalty
     time_penalty = 0.05
-    #action_penalty = torch.sum(actions ** 2, dim=-1) * action_penalty_scale
+    action_penalty = torch.sum(actions ** 2, dim=-1) * action_penalty_scale
 
     finger_dist = torch.norm(franka_lfinger_pos - franka_rfinger_pos, p=2, dim=-1)
 
