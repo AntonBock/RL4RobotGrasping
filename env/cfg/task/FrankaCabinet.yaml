@@ -6,7 +6,7 @@ physics_engine: ${..physics_engine}
 
 # if given, will override the device setting in gym. 
 env:
-  numEnvs: ${resolve_default:128,${...num_envs}}
+  numEnvs: ${resolve_default:2048,${...num_envs}}
   envSpacing: 1.5
   episodeLength: 200
   enableDebugVis: False
@@ -17,10 +17,10 @@ env:
   startPositionNoise: 0.0
   startRotationNoise: 0.0
 
-  randStartPos: 1.25
-  randTerrain: False
-  randomPropPosition: False
-  propSelect: ${resolve_default:"box",${...prop_sel}}
+  randStartPos: 0.25
+  randTerrain: True
+  randomPropPosition: True
+  propSelect: ${resolve_default:"randRock",${...prop_sel}} #box, randRock
   numProps: 1
   aggregateMode: 3
 

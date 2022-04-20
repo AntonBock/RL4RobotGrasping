@@ -817,12 +817,12 @@ def compute_franka_reward(
     d = torch.norm(franka_grasp_pos - prop_grasp_pos, p=2, dim=-1)
     #Prob height
     prob_height = prop_grasp_pos[:, 2]
+    prob_height = prob_height.double()
     # Time penalty
     time_penalty = 0.05
     #action_penalty = torch.sum(actions ** 2, dim=-1) * action_penalty_scale
 
     finger_dist = torch.norm(franka_lfinger_pos - franka_rfinger_pos, p=2, dim=-1)
-    finger_penalty = torch.where(finger_dist<0.03, 0.1, 0.0)
 
     #One time rewards
     # reward = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, 0), 0)
@@ -841,14 +841,17 @@ def compute_franka_reward(
 
     # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
     # dist_reward = torch.where(d <= 0.06, 10, 0)
-    height_reward = torch.where(prob_height>0.07, prob_height*100, 0)
-    height_reward = torch.where(prob_height>0.15, 1000, 0)
+
+    height_reward = torch.where(prob_height>0.05, prob_height*100, 0.0)
+    height_reward = torch.where(prob_height>0.10, 1000.0, height_reward)
+    height_reward = torch.where(prob_height>0.20, 0.0, height_reward)
+
         
-    grip_reward = grip * 10
+    grip_reward = torch.where(finger_dist>0.02, grip*100, 0)
 
-    rewards = dist_reward + height_reward + grip_reward - time_penalty - finger_penalty
+    rewards = dist_reward + height_reward + grip_reward
 
-    reset_buf = torch.where(prob_height>0.15, torch.ones_like(reset_buf), reset_buf)
+    #reset_buf = torch.where(prob_height>0.15, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
 
     #reset if prop somehow falls down
