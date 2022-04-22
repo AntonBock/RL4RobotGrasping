@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<robot name="rock">
+  <link name="rock">
+    <inertial>
+      <mass value="0.218"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="0.000218" ixy="0" ixz="0" iyy="0.000218" iyz="0" izz="0.000218"/>
+    </inertial>
+    <collision name="rock_collision">
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rocks/visual/158.dae" scale="1 1 1"/>
+      </geometry>
+    </collision>
+    <visual name="rock_visual">
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rocks/visual/158.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>

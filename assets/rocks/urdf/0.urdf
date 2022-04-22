@@ -2,9 +2,9 @@
 <robot name="rock">
   <link name="rock">
     <inertial>
-      <mass value="0.25"/>
+      <mass value="0.241"/>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <inertia ixx="0.00025" ixy="0" ixz="0" iyy="0.00025" iyz="0" izz="0.00025"/>
+      <inertia ixx="0.000241" ixy="0" ixz="0" iyy="0.000241" iyz="0" izz="0.000241"/>
     </inertial>
     <collision name="rock_collision">
       <origin rpy="0 0 0" xyz="0 0 0"/>

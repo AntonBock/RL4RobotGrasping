@@ -70,6 +70,7 @@ class FrankaCabinet(VecTask):
         self.randProp = self.cfg["env"]["propSelect"]
         self.randTerrain = self.cfg["env"]["randTerrain"]
         self.randFrankaPos = self.cfg["env"]["randStartPos"]
+        self.randDynamics = self.cfg["env"]["randDynamics"]
 
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
         self.using_camera = self.cfg["env"]["enableCameraSensors"]
@@ -142,7 +143,7 @@ class FrankaCabinet(VecTask):
         self.sim_params.up_axis = gymapi.UP_AXIS_Z
         self.sim_params.gravity.x = 0
         self.sim_params.gravity.y = 0
-        self.sim_params.gravity.z = -9.81
+        self.sim_params.gravity.z = -9.8164 #Gravity in Suldrup, DK. Source: https://www.space.dtu.dk/english/-/media/Institutter/Space/English/reports/technical_reports/tech_no_6.ashx, page 7
         self.sim = super().create_sim(
             self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
             
@@ -163,11 +164,9 @@ class FrankaCabinet(VecTask):
     def _create_envs(self, num_envs, spacing, num_per_row):
         print("Creating envs")
 
-        print("Num pr row: ", num_per_row)
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
-        
 
         asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets")
         franka_asset_file = "urdf/franka_description/robots/franka_panda.urdf"
@@ -184,6 +183,7 @@ class FrankaCabinet(VecTask):
         for i in range(len(os.listdir("assets/rocks/urdf"))):            
             rock_asset_file = os.path.join("rocks/urdf/",f"{i}.urdf")         
             rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)  
+
             rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
             self.rockList.append(rock_asset)
   
@@ -249,10 +249,6 @@ class FrankaCabinet(VecTask):
         franka_dof_props['effort'][7] = 200
         franka_dof_props['effort'][8] = 200
 
-        # create prop assets
-        # box_opts = gymapi.AssetOptions()
-        # box_opts.density = 400
-        # prop_asset = self.gym.create_box(self.sim, self.prop_width, self.prop_height, self.prop_width, box_opts)
 
         franka_start_pose = gymapi.Transform()
         franka_start_pose.p = gymapi.Vec3(1.0, 0.0, 0.0)
@@ -294,6 +290,20 @@ class FrankaCabinet(VecTask):
                 self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
             franka_actor = self.gym.create_actor(env_ptr, franka_asset, franka_start_pose, "franka", i, 1, 0)
+
+
+            if self.randDynamics:
+                randDyn = randrange_float(0.99, 1.01, 0.00001)
+            else:
+                randDyn = 1
+            
+            franka_dof_stiffness = to_torch([400*randDyn, 400*randDyn, 400*randDyn, 400*randDyn, 400*randDyn, 400*randDyn, 400*randDyn, 1.0e6, 1.0e6], dtype=torch.float, device=self.device)
+            franka_dof_damping = to_torch([80*randDyn, 80*randDyn, 80*randDyn, 80*randDyn, 80*randDyn, 80*randDyn, 80*randDyn, 1.0e2, 1.0e2], dtype=torch.float, device=self.device)
+
+            for mm in range(self.num_franka_dofs):
+                franka_dof_props['stiffness'][mm] = franka_dof_stiffness[mm]
+                franka_dof_props['damping'][mm] = franka_dof_damping[mm]
+
             self.gym.set_actor_dof_properties(env_ptr, franka_actor, franka_dof_props)
 
             if self.aggregate_mode == 2:
@@ -319,13 +329,17 @@ class FrankaCabinet(VecTask):
                 subt=SubTerrain(width=num_rows, length=num_cols, vertical_scale=vertical_scale, horizontal_scale=horizontal_scale)
 
 
-                heightfield = random_uniform_terrain(subt, min_height=-0.2, max_height=0.0, step=0.01, downsampled_scale=0.5).height_field_raw
+                heightfield = random_uniform_terrain(subt, min_height=-0.2, max_height=0.0, step=0.01, downsampled_scale=0.5).height_field_raw #ds=0.5
 
                 # add the terrain as a triangle mesh
                 vertices, triangles = convert_heightfield_to_trimesh(heightfield, horizontal_scale=horizontal_scale, vertical_scale=vertical_scale, slope_threshold=1.5)
                 tm_params = gymapi.TriangleMeshParams()
                 tm_params.nb_vertices = vertices.shape[0]
                 tm_params.nb_triangles = triangles.shape[0]
+
+                # #Friction for ground plane
+                # tm_params.dynamic_friction = 0.01
+                # tm_params.static_friction = 0.01
                 
 
                 if i % num_per_row == 0: 
@@ -517,7 +531,7 @@ class FrankaCabinet(VecTask):
 
 
     def compute_reward(self, actions):
- 
+        print("Compute reward")
         self.gym.refresh_net_contact_force_tensor(self.sim)
         _force_vec = self.gym.acquire_net_contact_force_tensor(self.sim)
         force_vec = gymtorch.wrap_tensor(_force_vec)
@@ -549,6 +563,7 @@ class FrankaCabinet(VecTask):
 
 
     def compute_observations(self):
+        print ("Compute observation")
 
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
@@ -593,24 +608,19 @@ class FrankaCabinet(VecTask):
 
 
     def reset_idx(self, env_ids):
-        # print("Running reset_idx")
+        print("Running reset_idx")
         env_ids_int32 = env_ids.to(dtype=torch.int32)
-
-        
 
         pos = tensor_clamp(
             self.franka_default_dof_pos.unsqueeze(0) + self.randFrankaPos * (torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
 
-        # print("pos: ", pos)
 
-        # print("what to change: ", self.franka_dof_pos[env_ids, :])
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
         
-        # reset cabinet
-        #self.cabinet_dof_state[env_ids, :] = torch.zeros_like(self.cabinet_dof_state[env_ids])
+
 
         # reset props (Random)
         if self.randPos:
@@ -699,6 +709,9 @@ class FrankaCabinet(VecTask):
 
     def pre_physics_step(self, actions):
         num_not_grip_dofs = self.num_franka_dofs-2
+        
+        # print("Pre_physx")
+        # print("Prop_grasp_pos: ", self.prop_grasp_pos)
         self.actions = actions.clone().to(self.device)
         targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * self.actions * self.action_scale
         self.franka_dof_targets[:, :self.num_franka_dofs] = tensor_clamp(
@@ -709,9 +722,16 @@ class FrankaCabinet(VecTask):
 
 
     def post_physics_step(self):
+        print("Post Physics")
         self.progress_buf += 1
 
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
+
+
+        print("        ")
+        print("Look:", env_ids)
+        print("        ")
+
         if len(env_ids) > 0:
             self.reset_idx(env_ids)
 
