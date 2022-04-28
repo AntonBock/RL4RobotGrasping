@@ -531,7 +531,7 @@ class FrankaCabinet(VecTask):
 
 
     def compute_reward(self, actions):
-        print("Compute reward")
+        #print("Compute reward")
         self.gym.refresh_net_contact_force_tensor(self.sim)
         _force_vec = self.gym.acquire_net_contact_force_tensor(self.sim)
         force_vec = gymtorch.wrap_tensor(_force_vec)
@@ -563,7 +563,7 @@ class FrankaCabinet(VecTask):
 
 
     def compute_observations(self):
-        print ("Compute observation")
+        #print ("Compute observation")
 
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
@@ -608,7 +608,7 @@ class FrankaCabinet(VecTask):
 
 
     def reset_idx(self, env_ids):
-        print("Running reset_idx")
+        #print("Running reset_idx")
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
         pos = tensor_clamp(
@@ -722,15 +722,15 @@ class FrankaCabinet(VecTask):
 
 
     def post_physics_step(self):
-        print("Post Physics")
+        #print("Post Physics")
         self.progress_buf += 1
 
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
 
 
-        print("        ")
-        print("Look:", env_ids)
-        print("        ")
+        #print("        ")
+        #print("Look:", env_ids)
+        #print("        ")
 
         if len(env_ids) > 0:
             self.reset_idx(env_ids)
@@ -863,11 +863,11 @@ def compute_franka_reward(
     # dist_reward = torch.where(d <= 0.06, 10, 0)
 
     height_reward = torch.where(prob_height>0.05, prob_height*100, 0.0)
-    height_reward = torch.where(prob_height>0.10, 1000.0, height_reward)
+    height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
     height_reward = torch.where(prob_height>0.20, 0.0, height_reward)
 
         
-    grip_reward = torch.where(finger_dist>0.02, grip*100, 0)
+    grip_reward = torch.where(finger_dist>0.02, grip*50, 0)
 
     rewards = dist_reward + height_reward + grip_reward
 

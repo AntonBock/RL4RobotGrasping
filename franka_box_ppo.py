@@ -75,11 +75,7 @@ networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device
             "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
 
 if checkpoint:
-<<<<<<< Updated upstream
-    networks_ppo["policy"].load("./runs/22-04-20_09-35-37-725484_PPO/checkpoints/200000_policy.pt") 
-=======
     networks_ppo["policy"].load("./runs/131k_policy.pt") 
->>>>>>> Stashed changes
 else:
     # Initialize the models' parameters (weights and biases) using a Gaussian distribution
     for network in networks_ppo.values():
