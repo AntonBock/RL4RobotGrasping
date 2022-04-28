@@ -75,7 +75,11 @@ networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device
             "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
 
 if checkpoint:
+<<<<<<< Updated upstream
     networks_ppo["policy"].load("./runs/22-04-20_09-35-37-725484_PPO/checkpoints/200000_policy.pt") 
+=======
+    networks_ppo["policy"].load("./runs/131k_policy.pt") 
+>>>>>>> Stashed changes
 else:
     # Initialize the models' parameters (weights and biases) using a Gaussian distribution
     for network in networks_ppo.values():
@@ -95,7 +99,7 @@ cfg_ppo["grad_norm_clip"] = 0.5
 cfg_ppo["value_loss_scale"] = 2.0
 # logging to TensorBoard and write checkpoints each 16 and 1000 timesteps respectively
 cfg_ppo["experiment"]["write_interval"] = 50
-cfg_ppo["experiment"]["checkpoint_interval"] = 2000
+cfg_ppo["experiment"]["checkpoint_interval"] = 1000
 cfg_ppo["policy_learning_rate"] = 5e-4   # policy learning rate
 cfg_ppo["value_learning_rate"] = 5e-4
 

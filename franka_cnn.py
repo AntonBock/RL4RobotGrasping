@@ -25,15 +25,23 @@ class Policy(GaussianModel):
         super().__init__(observation_space, action_space, device, clip_actions,
                          clip_log_std, min_log_std, max_log_std)
 
-        self.net_cnn= nn.Sequential(nn.Conv2d(1, 16, kernel_size=8, stride=4),
+        # self.net_cnn= nn.Sequential(nn.Conv2d(1, 16, kernel_size=8, stride=4),
+        #                          nn.ReLU(),
+        #                          nn.Conv2d(16, 32, kernel_size=4, stride=2),
+        #                          nn.ReLU(),
+        #                          nn.Conv2d(32, 32, kernel_size=3, stride=1),
+        #                          nn.ReLU(),
+        #                          nn.Flatten())
+
+        self.net_cnn= nn.Sequential(nn.Conv2d(1, 4, kernel_size=8, stride=4),
                                  nn.ReLU(),
-                                 nn.Conv2d(16, 32, kernel_size=4, stride=2),
+                                 nn.Conv2d(4, 8, kernel_size=4, stride=2),
                                  nn.ReLU(),
-                                 nn.Conv2d(32, 32, kernel_size=3, stride=1),
+                                 nn.Conv2d(8, 8, kernel_size=4, stride=2),
                                  nn.ReLU(),
                                  nn.Flatten())
 
-        self.net_fc = nn.Sequential(nn.Linear(531, 512),
+        self.net_fc = nn.Sequential(nn.Linear(51, 512),
                                  nn.ELU(),
                                  nn.Linear(512, 256),
                                  nn.ELU(),
@@ -62,15 +70,23 @@ class Value(DeterministicModel):
     def __init__(self, observation_space, action_space, device, clip_actions=False):
         super().__init__(observation_space, action_space, device, clip_actions)
 
-        self.net_cnn= nn.Sequential(nn.Conv2d(1, 16, kernel_size=8, stride=4),
+        # self.net_cnn= nn.Sequential(nn.Conv2d(1, 16, kernel_size=8, stride=4),
+        #                          nn.ReLU(),
+        #                          nn.Conv2d(16, 32, kernel_size=4, stride=2),
+        #                          nn.ReLU(),
+        #                          nn.Conv2d(32, 32, kernel_size=3, stride=1),
+        #                          nn.ReLU(),
+        #                          nn.Flatten())
+
+        self.net_cnn= nn.Sequential(nn.Conv2d(1, 4, kernel_size=8, stride=4),
                                  nn.ReLU(),
-                                 nn.Conv2d(16, 32, kernel_size=4, stride=2),
+                                 nn.Conv2d(4, 8, kernel_size=4, stride=2),
                                  nn.ReLU(),
-                                 nn.Conv2d(32, 32, kernel_size=3, stride=1),
+                                 nn.Conv2d(8, 8, kernel_size=4, stride=2),
                                  nn.ReLU(),
                                  nn.Flatten())
 
-        self.net_fc = nn.Sequential(nn.Linear(531, 512),
+        self.net_fc = nn.Sequential(nn.Linear(51, 512),
                                  nn.ELU(),
                                  nn.Linear(512, 256),
                                  nn.ELU(),
@@ -109,7 +125,7 @@ networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device
             "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
 
 if checkpoint:
-    networks_ppo["policy"].load("./runs/million/checkpoints/1000000_policy.pt") 
+    networks_ppo["policy"].load("./runs/14000_policy.pt") 
 else:
     # Initialize the models' parameters (weights and biases) using a Gaussian distribution
     for network in networks_ppo.values():
@@ -128,7 +144,7 @@ cfg_ppo["grad_norm_clip"] = 0.5
 cfg_ppo["value_loss_scale"] = 2.0
 # logging to TensorBoard and write checkpoints each 16 and 1000 timesteps respectively
 cfg_ppo["experiment"]["write_interval"] = 50
-cfg_ppo["experiment"]["checkpoint_interval"] = 2000
+cfg_ppo["experiment"]["checkpoint_interval"] = 1000
 cfg_ppo["policy_learning_rate"] = 5e-4   # policy learning rate
 cfg_ppo["value_learning_rate"] = 5e-4
 
