@@ -862,9 +862,9 @@ def compute_franka_reward(
     # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
     # dist_reward = torch.where(d <= 0.06, 10, 0)
 
-    height_reward = torch.where(prob_height>0.05, prob_height*100, 0.0)
+    height_reward = torch.where(prob_height>0.05, prob_height*prob_height*10000, 0.0)
     height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
-    height_reward = torch.where(prob_height>0.20, 0.0, height_reward)
+    height_reward = torch.where(prob_height>0.20, 200.0-prob_height*1000, height_reward)
 
         
     grip_reward = torch.where(finger_dist>0.02, grip*50, 0)
