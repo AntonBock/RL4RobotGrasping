@@ -37,11 +37,11 @@ class Policy(GaussianModel):
                                  nn.ReLU(),
                                  nn.Conv2d(4, 8, kernel_size=4, stride=2),
                                  nn.ReLU(),
-                                 nn.Conv2d(8, 8, kernel_size=4, stride=2),
+                                 nn.Conv2d(8, 8, kernel_size=3, stride=1),
                                  nn.ReLU(),
                                  nn.Flatten())
 
-        self.net_fc = nn.Sequential(nn.Linear(51, 512),
+        self.net_fc = nn.Sequential(nn.Linear(411, 512),
                                  nn.ELU(),
                                  nn.Linear(512, 256),
                                  nn.ELU(),
@@ -56,12 +56,12 @@ class Policy(GaussianModel):
     def compute(self, states, taken_actions):
         #print(f"states: {states.shape}")
         #Split states into image and robot data, states --> [img, data]
-        img, data = torch.split(states, [64*64, 19], dim=1)
+        img, data = torch.split(states, [84*84, 19], dim=1)
 
         # print(f"observation space: {self.observation_space.shape}")
         # view (samples, width * height * channels) -> (samples, width, height, channels) 
         # permute (samples, width, height, channels) -> (samples, channels, width, height) 
-        x = self.net_cnn(img.view(-1, 64, 64, 1).permute(0, 3, 1, 2))
+        x = self.net_cnn(img.view(-1, 84, 84, 1).permute(0, 3, 1, 2))
         y = torch.cat((x, data), 1)
         z = self.net_fc(y)
         return torch.tanh(z), self.log_std_parameter
@@ -82,11 +82,11 @@ class Value(DeterministicModel):
                                  nn.ReLU(),
                                  nn.Conv2d(4, 8, kernel_size=4, stride=2),
                                  nn.ReLU(),
-                                 nn.Conv2d(8, 8, kernel_size=4, stride=2),
+                                 nn.Conv2d(8, 8, kernel_size=3, stride=1),
                                  nn.ReLU(),
                                  nn.Flatten())
 
-        self.net_fc = nn.Sequential(nn.Linear(51, 512),
+        self.net_fc = nn.Sequential(nn.Linear(411, 512),
                                  nn.ELU(),
                                  nn.Linear(512, 256),
                                  nn.ELU(),
@@ -98,11 +98,11 @@ class Value(DeterministicModel):
 
     def compute(self, states, taken_actions):
         #Split states into image and robot data, split states (img, data)
-        img, data = torch.split(states, [64*64, 19], dim=1)
+        img, data = torch.split(states, [84*84, 19], dim=1)
 
         # view (samples, width * height * channels) -> (samples, width, height, channels) 
         # permute (samples, width, height, channels) -> (samples, channels, width, height) 
-        x = self.net_cnn(img.view(-1, 64, 64, 1).permute(0, 3, 1, 2))
+        x = self.net_cnn(img.view(-1, 84, 84, 1).permute(0, 3, 1, 2))
         y = torch.cat((x, data), 1)
         return self.net_fc(y)
 

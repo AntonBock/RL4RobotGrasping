@@ -88,8 +88,8 @@ class FrankaCabinet(VecTask):
         self.prop_length = 0.05
         self.prop_spacing = 0.06
 
-        self.cam_width = 64
-        self.cam_height = 64
+        self.cam_width = 84
+        self.cam_height = 84
         self.cam_pixels = self.cam_width*self.cam_height
         self.non_cam_observations = 19
 
@@ -437,7 +437,7 @@ class FrankaCabinet(VecTask):
             camera_prop = self.camera_prop_setup()
             camera_handle = self.gym.create_camera_sensor(env_ptr, camera_prop)
             self.cams.append(camera_handle)
-            self.gym.set_camera_location(camera_handle, env_ptr, gymapi.Vec3(0.2, 0.0, 0.4), gymapi.Vec3(1.0, 0.0, 0.0))
+            self.gym.set_camera_location(camera_handle, env_ptr, gymapi.Vec3(0.2, 0.0, 1.0), gymapi.Vec3(0.6, 0.0, 0.0))
 
             # wrap camera tensor in a pytorch tensor
             cam_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env_ptr, camera_handle, gymapi.IMAGE_DEPTH)
@@ -595,7 +595,6 @@ class FrankaCabinet(VecTask):
 
             img_tensor= torch.stack((self.cam_tensors), 0)  # combine images
             img_tensor[img_tensor < -2] = 0 # remove faraway data
-            img_tensor = img_tensor*100
 
             camera_data = torch.reshape(img_tensor, (self.num_envs, self.cam_pixels))
             self.obs_buf= torch.cat((camera_data, dof_pos_scaled, self.franka_dof_vel * self.dof_vel_scale, self.franka_grasp_pos[:, 2].unsqueeze(-1)), 1)
