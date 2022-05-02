@@ -93,7 +93,7 @@ class Cartpole(VecTask):
         self.dof_pos = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 0]
         self.dof_vel = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 1]
 
-        sizeLayer = layer_dim(8, 4, self.cam_width)
+        sizeLayer = layer_dim(8, 4, 84)
         print(f"Size of layer: {sizeLayer}")
         sizeLayer = layer_dim(4, 2, sizeLayer)
         print(f"Size of layer: {sizeLayer}")

@@ -94,7 +94,7 @@ class FrankaCabinet(VecTask):
         self.non_cam_observations = 19
 
         self.cfg["env"]["numObservations"] = self.cam_pixels + self.non_cam_observations if self.using_camera else 22
-        self.cfg["env"]["numActions"] = 9
+        self.cfg["env"]["numActions"] = 8
 
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
 
@@ -707,12 +707,14 @@ class FrankaCabinet(VecTask):
 
 
     def pre_physics_step(self, actions):
-        num_not_grip_dofs = self.num_franka_dofs-2
         
         # print("Pre_physx")
         # print("Prop_grasp_pos: ", self.prop_grasp_pos)
         self.actions = actions.clone().to(self.device)
-        targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * self.actions * self.action_scale
+
+        actionGrip = torch.cat((self.actions, self.actions[:,7].unsqueeze(-1)), 1)
+
+        targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * actionGrip * self.action_scale
         self.franka_dof_targets[:, :self.num_franka_dofs] = tensor_clamp(
             targets, self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         env_ids_int32 = torch.arange(self.num_envs, dtype=torch.int32, device=self.device)
