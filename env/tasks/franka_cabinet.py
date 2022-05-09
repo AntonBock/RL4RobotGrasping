@@ -82,6 +82,8 @@ class FrankaCabinet(VecTask):
         self.distX_offset = 0.04
         self.dt = 1/60.
 
+
+
         # prop dimensions
         self.prop_width = 0.05
         self.prop_height = 0.05
@@ -261,6 +263,19 @@ class FrankaCabinet(VecTask):
         # rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
 
 
+        # Obstacle: 
+        self.wall_width = 0.30
+        self.wall_height = 0.20
+        self.wall_depth = 0.03
+
+
+        wall_asset_options = self.gym.AssetOptions()
+        wall_asset_options.density = 10.0
+        wall_asset_options.fix_base_link = True
+
+        wall_asset = self.gym.create_box(self.sim, self.wall_width, self.wall_height, self.wall_depth, wall_asset_options)
+
+
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
@@ -431,6 +446,16 @@ class FrankaCabinet(VecTask):
                                                          prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
                                                          0, 0, 0, 0, 0, 0])
 
+
+
+                        wall_state_pose = gymapi.Transform()
+                        wall_state_pose.p.x = prop_state_pose.p.x
+                        wall_state_pose.p.y = prop_state_pose.p.y
+                        wall_state_pose.p.z = prop_state_pose.p.z-0.10
+
+
+                        wall_actor = self.gym.create_actor(env_ptr, wall_asset, wall_state_pose, "wall{}".format(prop_count), i, 0, 0)
+
                         # self.gym.set_actor_scale(env_ptr, prop_actor, 0.035) 
                                                           
             #Camera setup
@@ -455,6 +480,7 @@ class FrankaCabinet(VecTask):
         self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
         #self.drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
         self.prop_handle = self.gym.find_actor_rigid_body_handle(env_ptr, prop_actor, "prop_box")
+        self.wall_handle = self.gym.find_actor_rigid_body_handle(env_ptr, wall_actor, "wall") # Unused?
         # self.gym.set_actor_scale(env_ptr, self.prop_handle, 5.2)
         # self.prop_handle = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
         self.lfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_leftfinger")
