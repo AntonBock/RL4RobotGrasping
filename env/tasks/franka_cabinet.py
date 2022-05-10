@@ -123,6 +123,10 @@ class FrankaCabinet(VecTask):
         self.prop_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:]
         self.prop_dof_pos = self.prop_dof_state[..., 0] 
         self.prop_dof_vel = self.prop_dof_state[..., 1] 
+        self.wall_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:]
+        self.wall_dof_pos = self.wall_dof_state[..., 0]
+        self.wall_dof_vel = self.wall_dof_state[..., 1]
+
 
         self.rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(self.num_envs, -1, 13)
         self.num_bodies = self.rigid_body_states.shape[1]
@@ -135,7 +139,8 @@ class FrankaCabinet(VecTask):
         self.num_dofs = self.gym.get_sim_dof_count(self.sim) // self.num_envs
         self.franka_dof_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
 
-        self.global_indices = torch.arange(self.num_envs * (1 + self.num_props), dtype=torch.int32, device=self.device).view(self.num_envs, -1)
+        # Check this if the wall fucks
+        self.global_indices = torch.arange(self.num_envs * (2 + self.num_props), dtype=torch.int32, device=self.device).view(self.num_envs, -1)
         # print("Finished __init__")
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
         # print("Finished __init__2")
@@ -175,6 +180,7 @@ class FrankaCabinet(VecTask):
         box_asset_file = "urdf/cube/cube.urdf"
         cyl_asset_file = "urdf/cylinder/cylinder.urdf"
         sphere_asset_file = "urdf/sphere/sphere.urdf"
+        wall_asset_file = "urdf/wall/wall.urdf"
         # rock_asset_file = "urdf/rock2/rock2.urdf"
         # sphere_asset_file = "urdf/donut_1/donut.urdf"
 
@@ -203,12 +209,15 @@ class FrankaCabinet(VecTask):
         asset_options.use_mesh_materials = True
 
 
+
+
         if "asset" in self.cfg["env"]:
             asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.cfg["env"]["asset"].get("assetRoot", asset_root))
             franka_asset_file = self.cfg["env"]["asset"].get("assetFileNameFranka", franka_asset_file)
             box_asset_file = self.cfg["env"]["asset"].get("assetFileNameBox", box_asset_file)
             cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
             sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
+            wall_asset_file = self.cfg["env"]["asset"].get("assetFileNameWall", wall_asset_file)
             # rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)
 
 
@@ -260,29 +269,31 @@ class FrankaCabinet(VecTask):
         box_asset = self.gym.load_asset(self.sim, asset_root, box_asset_file)
         cyl_asset = self.gym.load_asset(self.sim, asset_root, cyl_asset_file)
         sphere_asset = self.gym.load_asset(self.sim, asset_root, sphere_asset_file)
+        wall_asset = self.gym.load_asset(self.sim, asset_root, wall_asset_file)
         # rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
 
 
         # Obstacle: 
-        self.wall_width = 0.30
-        self.wall_height = 0.20
-        self.wall_depth = 0.03
+        # self.wall_width = 0.30
+        # self.wall_height = 0.20
+        # self.wall_depth = 0.03
 
 
-        wall_asset_options = self.gym.AssetOptions()
-        wall_asset_options.density = 10.0
-        wall_asset_options.fix_base_link = True
+        
+        # wall_asset_options = gymapi.AssetOptions()
+        # wall_asset_options.density = 10.0
+        # wall_asset_options.fix_base_link = True
 
-        wall_asset = self.gym.create_box(self.sim, self.wall_width, self.wall_height, self.wall_depth, wall_asset_options)
+        # wall_asset = self.gym.create_box(self.sim, self.wall_width, self.wall_height, self.wall_depth, wall_asset_options)
 
 
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
-        num_prop_bodies = 1 #self.gym.get_asset_rigid_body_count(prop_asset)
+        num_prop_bodies = 1 #self.gym.get_asset_rigid_body_count(prop_asset) 
         num_prop_shapes = 1 #self.gym.get_asset_rigid_shape_count(prop_asset)
-        max_agg_bodies = num_franka_bodies + self.num_props * num_prop_bodies 
-        max_agg_shapes = num_franka_shapes + self.num_props * num_prop_shapes 
+        max_agg_bodies = num_franka_bodies + 1 + self.num_props * num_prop_bodies #+1 to account for wall
+        max_agg_shapes = num_franka_shapes + 1 + self.num_props * num_prop_shapes 
 
         self.frankas = []
         self.default_prop_states = []
@@ -438,7 +449,7 @@ class FrankaCabinet(VecTask):
 
                         # xtra_actor = self.gym.create_actor(env_ptr, xtra_asset, prop_state_pose, "xtra{}".format(prop_count), i, 0, 0)
                         # prop_actor = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
-                        prop_count += 1
+                        
                         
 
                         prop_idx = j * props_per_row + k
@@ -449,12 +460,20 @@ class FrankaCabinet(VecTask):
 
 
                         wall_state_pose = gymapi.Transform()
-                        wall_state_pose.p.x = prop_state_pose.p.x
-                        wall_state_pose.p.y = prop_state_pose.p.y
-                        wall_state_pose.p.z = prop_state_pose.p.z-0.10
+                        # wall_state_pose.p.x = prop_state_pose.p.x
+                        # wall_state_pose.p.y = prop_state_pose.p.y-0.10
+                        # wall_state_pose.p.z = prop_state_pose.p.z
+
+                        wall_state_pose.p.x = 1
+                        wall_state_pose.p.y = 1
+                        wall_state_pose.p.z = 1
 
 
+                        
                         wall_actor = self.gym.create_actor(env_ptr, wall_asset, wall_state_pose, "wall{}".format(prop_count), i, 0, 0)
+
+                        prop_count += 1
+                       
 
                         # self.gym.set_actor_scale(env_ptr, prop_actor, 0.035) 
                                                           
@@ -599,6 +618,8 @@ class FrankaCabinet(VecTask):
         hand_rot = self.rigid_body_states[:, self.hand_handle][:, 3:7]
         prop_pos = self.rigid_body_states[:, self.prop_handle][:, 0:3]
         prop_rot = self.rigid_body_states[:, self.prop_handle][:, 3:7]
+        wall_pos = self.rigid_body_states[:, self.wall_handle][:, 0:3]
+        wall_rot = self.rigid_body_states[:, self.wall_handle][:, 3:7]
 
         self.franka_grasp_rot[:], self.franka_grasp_pos[:], self.prop_grasp_rot[:], self.prop_grasp_pos[:] = \
             compute_grasp_transforms(hand_rot, hand_pos, self.franka_local_grasp_rot, self.franka_local_grasp_pos,
@@ -633,20 +654,20 @@ class FrankaCabinet(VecTask):
 
 
     def reset_idx(self, env_ids):
-        #print("Running reset_idx")
+        # print("Running reset_idx")
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
         pos = tensor_clamp(
             self.franka_default_dof_pos.unsqueeze(0) + self.randFrankaPos * (torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
 
-
+        
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
         
 
-
+        
         # reset props (Random)
         if self.randPos:
 
@@ -708,21 +729,45 @@ class FrankaCabinet(VecTask):
         
             self.default_prop_states = to_torch(self.rand_prop_states, device=self.device, dtype=torch.float).view(self.num_envs, self.num_props, 13)
 
-
+        
         if self.num_props > 0:
-            prop_indices = self.global_indices[env_ids, 1:].flatten()
+            prop_indices = self.global_indices[env_ids, 2:].flatten()
             self.prop_states[env_ids] = self.default_prop_states[env_ids]
             # print("Prop pos: ", self.default_prop_states[env_ids])
+
+            
 
             self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                          gymtorch.unwrap_tensor(self.root_state_tensor),
                                                          gymtorch.unwrap_tensor(prop_indices), len(prop_indices))
+
+
+
+        print("indice: ", self.global_indices[env_ids, 2:].flatten())
+
+    #Reset wall
+
+        # wall_indices = self.global_indices[env_ids, 2:].flatten()
+        # self.wall_states[env_ids] = self.default_prop_states[env_ids]
+        # # print("Prop pos: ", self.default_prop_states[env_ids])
+
+        # self.gym.set_actor_root_state_tensor_indexed(self.sim,
+        #                                                 gymtorch.unwrap_tensor(self.root_state_tensor),
+        #                                                 gymtorch.unwrap_tensor(prop_indices), len(prop_indices))
+
+        self.wall_dof_state[env_ids, :] = torch.zeros_like(self.wall_dof_state[env_ids])
+
+
+
+    # End reset if wall
         
-        multi_env_ids_int32 = self.global_indices[env_ids, :1].flatten()
+        
+        multi_env_ids_int32 = self.global_indices[env_ids, :2].flatten()
         self.gym.set_dof_position_target_tensor_indexed(self.sim,
                                                         gymtorch.unwrap_tensor(self.franka_dof_targets),
                                                         gymtorch.unwrap_tensor(multi_env_ids_int32), len(multi_env_ids_int32))
         
+
         self.gym.set_dof_state_tensor_indexed(self.sim,
                                               gymtorch.unwrap_tensor(self.dof_state),
                                               gymtorch.unwrap_tensor(multi_env_ids_int32), len(multi_env_ids_int32))
