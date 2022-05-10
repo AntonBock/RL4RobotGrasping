@@ -93,7 +93,7 @@ class FrankaCabinet(VecTask):
         self.cam_pixels = self.cam_width*self.cam_height
         self.non_cam_observations = 19
 
-        self.cfg["env"]["numObservations"] = self.cam_pixels + self.non_cam_observations if self.using_camera else 22
+        self.cfg["env"]["numObservations"] = self.cam_pixels + self.non_cam_observations if self.using_camera else 19
         self.cfg["env"]["numActions"] = 8
 
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
@@ -109,6 +109,8 @@ class FrankaCabinet(VecTask):
 
         # reward state
         self.reward_state = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
+        self.succes_counter = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
+        self.fail_counter = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
 
         # create some wrapper tensors for different slices
 
@@ -552,14 +554,19 @@ class FrankaCabinet(VecTask):
         collision_tens = torch.where(torch.norm(_force_vec_franka, p=2, dim=-1) > 100, 0, 1)
         collision_tens = torch.all(collision_tens, 1)
 
-        self.rew_buf[:], self.reset_buf[:] = compute_franka_reward(
+        self.rew_buf[:], self.reset_buf[:], self.succes_counter[:], self.fail_counter[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
             self.franka_grasp_pos, self.prop_grasp_pos, self.franka_grasp_rot, self.prop_grasp_rot,
             self.franka_lfinger_pos, self.franka_rfinger_pos,
             self.gripper_forward_axis, self.prop_inward_axis, self.gripper_up_axis, self.prop_up_axis,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale, self.height_reward_scale,
-            self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, grip_tens, collision_tens, self.reward_state
+            self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, grip_tens, collision_tens, self.reward_state, self.succes_counter, self.fail_counter
         )
+
+        #Success rate
+        total_success = torch.sum(self.succes_counter)
+        total_failure = torch.sum(self.fail_counter)
+        print(f"Total Success rate: {total_success}/{total_success+total_failure} = {total_success/(total_success+total_failure)}")
 
 
     def compute_observations(self):
@@ -601,8 +608,8 @@ class FrankaCabinet(VecTask):
             self.gym.end_access_image_tensors(self.sim)
         else:
             to_target = self.prop_grasp_pos - self.franka_grasp_pos # Distance to target
-            self.obs_buf = torch.cat((dof_pos_scaled, self.franka_dof_vel * self.dof_vel_scale, to_target, self.prop_grasp_pos[:, 2].unsqueeze(-1)), dim=-1) #self.prop_dof_vel[:, 3].unsqueeze(-1))
-
+            self.obs_buf = torch.cat((dof_pos_scaled[:,:8], self.franka_dof_vel[:,:7] * self.dof_vel_scale, to_target, self.prop_grasp_pos[:, 2].unsqueeze(-1)), dim=-1) #self.prop_dof_vel[:, 3].unsqueeze(-1))
+            #print(f"Obs_buf shape: {self.obs_buf.shape} test: {dof_pos_scaled[:,:7].shape}")
         return self.obs_buf
 
 
@@ -830,9 +837,9 @@ def compute_franka_reward(
     franka_lfinger_pos, franka_rfinger_pos,
     gripper_forward_axis, prop_inward_axis, gripper_up_axis, prop_up_axis,
     num_envs, dist_reward_scale, rot_reward_scale, around_handle_reward_scale, height_reward_scale,
-    finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip, collision, reward_state
+    finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip, collision, reward_state, succes_count, fail_count
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor, Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]
 
     # distance from hand to the drawer
     d = torch.norm(franka_grasp_pos - prop_grasp_pos, p=2, dim=-1)
@@ -856,29 +863,37 @@ def compute_franka_reward(
     # reward_state = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 3, reward_state), reward_state)
 
     #Continuous reward
+    # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
+    # dist_reward = torch.where(d <= 0.06, 10, 0)
+
     dist_reward = 1.0 / (1.0 + d ** 2)
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.06, dist_reward*2.0, dist_reward)
 
-    # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
-    # dist_reward = torch.where(d <= 0.06, 10, 0)
+    grip_reward = torch.where(finger_dist>0.02, grip*10, 0)
 
-    height_reward = torch.where(prob_height>0.05, prob_height*prob_height*10000, 0.0)
-    height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
-    height_reward = torch.where(prob_height>0.20, 200.0-prob_height*1000, height_reward)
+    # height_reward = torch.where(prob_height>0.05, prob_height*prob_height*10000, 0.0)
+    # height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
+    # height_reward = torch.where(prob_height>0.20, 200.0-prob_height*1000, height_reward)
 
+    height_reward = torch.where(prob_height>0.05, prob_height*100, 0.0)
+    height_reward = torch.where(prob_height>0.10, 10000.0, height_reward)
+
+    #reset on Succes
+    succes_count = torch.where(prob_height>0.10, succes_count+1, succes_count)
+    reset_buf = torch.where(prob_height>0.10, torch.ones_like(reset_buf), reset_buf)
         
-    grip_reward = torch.where(finger_dist>0.02, grip*50, 0)
-
-    rewards = dist_reward + height_reward + grip_reward
-
-    #reset_buf = torch.where(prob_height>0.15, torch.ones_like(reset_buf), reset_buf)
+    #Reset on failure
+    fail_count = torch.where(progress_buf >= max_episode_length - 1, fail_count+1, fail_count)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
 
     #reset if prop somehow falls down
     reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
-    return rewards, reset_buf
+    #Reward
+    rewards = dist_reward + grip_reward + height_reward 
+
+    return rewards, reset_buf, succes_count, fail_count
 
 
 
