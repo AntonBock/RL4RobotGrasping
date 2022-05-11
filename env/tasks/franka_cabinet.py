@@ -109,8 +109,9 @@ class FrankaCabinet(VecTask):
 
         # reward state
         self.reward_state = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
-        self.succes_counter = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
+        self.success_counter = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
         self.fail_counter = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
+        self.success_timer = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
 
         # create some wrapper tensors for different slices
 
@@ -554,19 +555,19 @@ class FrankaCabinet(VecTask):
         collision_tens = torch.where(torch.norm(_force_vec_franka, p=2, dim=-1) > 100, 0, 1)
         collision_tens = torch.all(collision_tens, 1)
 
-        self.rew_buf[:], self.reset_buf[:], self.succes_counter[:], self.fail_counter[:] = compute_franka_reward(
+        self.rew_buf[:], self.reset_buf[:], self.success_counter[:], self.fail_counter[:], self.success_timer[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
             self.franka_grasp_pos, self.prop_grasp_pos, self.franka_grasp_rot, self.prop_grasp_rot,
             self.franka_lfinger_pos, self.franka_rfinger_pos,
             self.gripper_forward_axis, self.prop_inward_axis, self.gripper_up_axis, self.prop_up_axis,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale, self.height_reward_scale,
-            self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, grip_tens, collision_tens, self.reward_state, self.succes_counter, self.fail_counter
+            self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, grip_tens, collision_tens, self.reward_state, self.success_counter, self.fail_counter, self.success_timer
         )
 
         #Success rate
-        total_success = torch.sum(self.succes_counter)
-        total_failure = torch.sum(self.fail_counter)
-        print(f"Total Success rate: {total_success}/{total_success+total_failure} = {total_success/(total_success+total_failure)}")
+        # total_success = torch.sum(self.success_counter)
+        # total_failure = torch.sum(self.fail_counter)
+        #print(f"Total Success rate: {total_success}/{total_success+total_failure} = {total_success/(total_success+total_failure)}")
 
 
     def compute_observations(self):
@@ -709,6 +710,7 @@ class FrankaCabinet(VecTask):
                                               gymtorch.unwrap_tensor(multi_env_ids_int32), len(multi_env_ids_int32))
         
         self.reward_state[env_ids] = 0
+        self.success_timer[env_ids] = 0
         self.progress_buf[env_ids] = 0
         self.reset_buf[env_ids] = 0
 
@@ -837,9 +839,9 @@ def compute_franka_reward(
     franka_lfinger_pos, franka_rfinger_pos,
     gripper_forward_axis, prop_inward_axis, gripper_up_axis, prop_up_axis,
     num_envs, dist_reward_scale, rot_reward_scale, around_handle_reward_scale, height_reward_scale,
-    finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip, collision, reward_state, succes_count, fail_count
+    finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip, collision, reward_state, success_count, fail_count, success_time
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor, Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
 
     # distance from hand to the drawer
     d = torch.norm(franka_grasp_pos - prop_grasp_pos, p=2, dim=-1)
@@ -870,19 +872,26 @@ def compute_franka_reward(
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.06, dist_reward*2.0, dist_reward)
 
-    grip_reward = torch.where(finger_dist>0.02, grip*10, 0)
+    grip_reward = torch.where(finger_dist>0.02, grip*50, 0)
 
     # height_reward = torch.where(prob_height>0.05, prob_height*prob_height*10000, 0.0)
     # height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
     # height_reward = torch.where(prob_height>0.20, 200.0-prob_height*1000, height_reward)
 
     height_reward = torch.where(prob_height>0.05, prob_height*100, 0.0)
-    height_reward = torch.where(prob_height>0.10, 10000.0, height_reward)
+    height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
+    height_reward = torch.where(prob_height>0.30, 0.0, height_reward)
 
     #reset on Succes
-    succes_count = torch.where(prob_height>0.10, succes_count+1, succes_count)
-    reset_buf = torch.where(prob_height>0.10, torch.ones_like(reset_buf), reset_buf)
-        
+    success_time = torch.where(prob_height>0.10, torch.where(prob_height<0.30, success_time+1, 0), 0)
+    success_count = torch.where(success_time>30, success_count+1, success_count)
+    reset_buf = torch.where(success_time>30, torch.ones_like(reset_buf), reset_buf)
+
+    end_reward = (max_episode_length-progress_buf)*200
+    end_reward = end_reward.double()
+    success_reward = torch.where(success_time>30, end_reward, 0.0)
+    
+    
     #Reset on failure
     fail_count = torch.where(progress_buf >= max_episode_length - 1, fail_count+1, fail_count)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
@@ -891,9 +900,9 @@ def compute_franka_reward(
     reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
     #Reward
-    rewards = dist_reward + grip_reward + height_reward 
+    rewards = dist_reward + grip_reward + height_reward + success_reward
 
-    return rewards, reset_buf, succes_count, fail_count
+    return rewards, reset_buf, success_count, fail_count, success_time
 
 
 
