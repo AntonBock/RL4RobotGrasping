@@ -282,6 +282,8 @@ class FrankaCabinet(VecTask):
         print("Iterating through environments")
         tx = -spacing
         ty= -spacing*3
+
+        xount = 0
         
         for i in range(self.num_envs):
             # create env instance
@@ -405,8 +407,10 @@ class FrankaCabinet(VecTask):
 
                         # choice of prop
 
-
-
+                        if xount > len(self.rockList)-1:
+                            xount=0
+                        
+                        
                         if self.randProp == "box":
                             prop_actor = self.gym.create_actor(env_ptr, box_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         elif self.randProp == "cyl":
@@ -414,7 +418,12 @@ class FrankaCabinet(VecTask):
                         elif self.randProp == "sphere":
                             prop_actor = self.gym.create_actor(env_ptr, sphere_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         elif self.randProp == "randRock":
-                            x = chooseProp(len(self.rockList)-1)
+                            #Random order
+                            # x = chooseProp(len(self.rockList)-1)
+
+                            #Non-random order
+                            x = xount 
+
                             prop_actor = self.gym.create_actor(env_ptr, self.rockList[x], prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         elif self.randProp == "rand":
                             x = chooseProp(3)
@@ -427,7 +436,7 @@ class FrankaCabinet(VecTask):
                         # xtra_actor = self.gym.create_actor(env_ptr, xtra_asset, prop_state_pose, "xtra{}".format(prop_count), i, 0, 0)
                         # prop_actor = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         prop_count += 1
-                        
+                        xount += 1
 
                         prop_idx = j * props_per_row + k
                         self.default_prop_states.append([prop_state_pose.p.x , prop_state_pose.p.y, prop_state_pose.p.z,
