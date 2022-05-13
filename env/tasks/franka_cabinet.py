@@ -112,6 +112,7 @@ class FrankaCabinet(VecTask):
         self.success_counter = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
         self.fail_counter = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
         self.success_timer = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
+        self.global_timer = 0
 
         # create some wrapper tensors for different slices
 
@@ -562,7 +563,7 @@ class FrankaCabinet(VecTask):
                      torch.where(torch.norm(_force_vec_right, p=2, dim=-1) > 5, grip_tens, 0), 0)
 
         collision_tens = torch.where(torch.norm(_force_vec_franka, p=2, dim=-1) > 100, 0, 1)
-        collision_tens = torch.all(collision_tens, 1)
+        collision_tens = ~torch.all(collision_tens, 1)
 
         self.rew_buf[:], self.reset_buf[:], self.success_counter[:], self.fail_counter[:], self.success_timer[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
@@ -573,10 +574,13 @@ class FrankaCabinet(VecTask):
             self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length, grip_tens, collision_tens, self.reward_state, self.success_counter, self.fail_counter, self.success_timer
         )
 
-        #Success rate
-        # total_success = torch.sum(self.success_counter)
-        # total_failure = torch.sum(self.fail_counter)
-        #print(f"Total Success rate: {total_success}/{total_success+total_failure} = {total_success/(total_success+total_failure)}")
+        if(self.global_timer % 500 == 0):
+            #Success rate
+            total_success = torch.sum(self.success_counter)
+            total_failure = torch.sum(self.fail_counter)
+            print(f"Total Success rate: {total_success}/{total_success+total_failure} = {total_success/(total_success+total_failure)}")
+            env_success = torch.div(self.success_counter, torch.add(self.success_counter, self.fail_counter))
+            #print(env_success)
 
 
     def compute_observations(self):
@@ -610,7 +614,7 @@ class FrankaCabinet(VecTask):
 
             if self.img_save: self.save_images()
 
-            img_tensor= torch.stack((self.cam_tensors), 0)  # combine images
+            img_tensor = torch.stack((self.cam_tensors), 0)  # combine images
             img_tensor[img_tensor < -2] = 0 # remove faraway data
 
             camera_data = torch.reshape(img_tensor, (self.num_envs, self.cam_pixels))
@@ -743,6 +747,7 @@ class FrankaCabinet(VecTask):
     def post_physics_step(self):
         #print("Post Physics")
         self.progress_buf += 1
+        self.global_timer += 1
 
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
 
