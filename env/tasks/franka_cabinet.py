@@ -892,9 +892,9 @@ def compute_franka_reward(
     # height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
     # height_reward = torch.where(prob_height>0.20, 200.0-prob_height*1000, height_reward)
 
-    height_reward = torch.where(prob_height>0.05, prob_height*100, 0.0)
+    height_reward = torch.where(prob_height>0.05, prob_height*prob_height*10000, 0.0)
     height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
-    height_reward = torch.where(prob_height>0.30, 0.0, height_reward)
+    height_reward = torch.where(prob_height>0.30, 400-prob_height*1000, height_reward)
 
     #reset on Succes
     success_time = torch.where(prob_height>0.10, torch.where(prob_height<0.30, success_time+1, 0), 0)
@@ -904,7 +904,6 @@ def compute_franka_reward(
     end_reward = (max_episode_length-progress_buf)*200
     end_reward = end_reward.double()
     success_reward = torch.where(success_time>30, end_reward, 0.0)
-    
     
     #Reset on failure
     fail_count = torch.where(progress_buf >= max_episode_length - 1, fail_count+1, fail_count)
