@@ -645,64 +645,28 @@ class FrankaCabinet(VecTask):
         # reset props (Random)
         if self.randPos:
 
-            self.rand_prop_states = []
-            for i in range(self.num_envs):
-                if self.num_props > 0:
+            prop_state_pose = gymapi.Transform()
 
+            prop_state_pose.p.x = random.uniform(0.40, 0.80) 
 
-                    props_per_row = int(np.ceil(np.sqrt(self.num_props)))
-                    xmin = -0.5 * self.prop_spacing * (props_per_row - 1)
-                    yzmin = -0.5 * self.prop_spacing * (props_per_row - 1)
+            prop_state_pose.p.y = random.uniform(-0.50, 0.50)
+            prop_state_pose.p.z = 0.026
+            
+            roll = 0
+            pitch = 0
+            yaw = random.uniform(0.00000, 6.28318)
 
-                    prop_count = 0
-                    for j in range(props_per_row):
-                        prop_up = yzmin + j * self.prop_spacing
-                        for k in range(props_per_row):
-                            if prop_count >= self.num_props:
-                                break
-                            # propx = xmin + k * self.prop_spacing
-
-                            random.seed()
-
-                            prop_state_pose = gymapi.Transform()
-
-
-                            prop_state_pose.p.x = randrange_float(0.40, 0.80, self.prop_spacing) # returns 2.4
-                            # propz, propy = 0, p
-                            prop_state_pose.p.y = randrange_float(-0.50, 0.50, self.prop_spacing)
-                            prop_state_pose.p.z = 0.026
-                            
-                            roll = 0
-                            pitch = 0
-                            yaw = random.uniform(0.00000, 6.28318)
-
-                            qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-                            qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
-                            qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
-                            qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-                            
-
-                            prop_state_pose.r = gymapi.Quat(qx, qy, qz, qw)
-                            prop_count += 1
-
-                            prop_idx = j * props_per_row + k
-                            self.rand_prop_states.append([prop_state_pose.p.x , prop_state_pose.p.y, prop_state_pose.p.z,
-                                                            prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
-                                                            0, 0, 0, 0, 0, 0])
-
-                                                          
-
-
-
-                            # if self.randProp == "rand":
-                            #     x = chooseProp()
-                            #     if x==0: temp_asset=box_asset
-                            #     elif x==1: temp_asset=cyl_asset
-                            #     elif x==2: temp_asset=sphere_asset
-                            #     prop_actor = self.gym.create_actor(env_ptr, temp_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
+            qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+            qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+            qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+            qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+            
+            prop_state_pose.r = gymapi.Quat(qx, qy, qz, qw)
         
-            self.default_prop_states = to_torch(self.rand_prop_states, device=self.device, dtype=torch.float).view(self.num_envs, self.num_props, 13)
-
+            self.default_prop_states = to_torch([prop_state_pose.p.x , prop_state_pose.p.y, prop_state_pose.p.z,
+                                                    prop_state_pose.r.x, prop_state_pose.r.y, prop_state_pose.r.z, prop_state_pose.r.w,
+                                                    0, 0, 0, 0, 0, 0], device=self.device, dtype=torch.float).repeat((self.num_envs, 1)).view(self.num_envs ,self.num_props, 13)
+            
 
         if self.num_props > 0:
             prop_indices = self.global_indices[env_ids, 1:].flatten()
