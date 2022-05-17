@@ -91,14 +91,25 @@ cfg_ppo["learning_starts"] = 0
 cfg_ppo["random_timesteps"] = 0
 cfg_ppo["rollouts"] = 16
 cfg_ppo["learning_epochs"] = 8
+cfg_ppo["mini_batches"] = 2
+
+cfg_ppo["discount_factor"] = 0.99
+cfg_ppo["lambda"] = 0.99
+cfg_ppo["policy_learning_rate"] = 0.0005
+cfg_ppo["value_learning_rate"] = 0.0005
+
 cfg_ppo["grad_norm_clip"] = 0.5
+cfg_ppo["ratio_clip"] = 0.2
+cfg_ppo["value_clip"] = 0.2
+cfg_ppo["clip_predicted_values"] = False
+
+cfg_ppo["entropy_loss_scale"] = 0.01
 cfg_ppo["value_loss_scale"] = 2.0
+
+cfg_ppo["kl_threshold"] = 0
 # logging to TensorBoard and write checkpoints each 16 and 1000 timesteps respectively
 cfg_ppo["experiment"]["write_interval"] = 50
 cfg_ppo["experiment"]["checkpoint_interval"] = 1000
-cfg_ppo["policy_learning_rate"] = 5e-4   # policy learning rate
-cfg_ppo["value_learning_rate"] = 5e-4
-
 
 agent = PPO(models=networks_ppo,
             memory=(memory if tt else None), 
@@ -109,7 +120,7 @@ agent = PPO(models=networks_ppo,
 
 
 # Configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 100000, "progress_interval": 500}
+cfg_trainer = {"timesteps": 200000, "progress_interval": 500}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
 # start training
