@@ -540,6 +540,7 @@ class FrankaCabinet(VecTask):
         self.franka_rfinger_pos = torch.zeros_like(self.franka_local_grasp_pos)
         self.franka_lfinger_rot = torch.zeros_like(self.franka_local_grasp_rot)
         self.franka_rfinger_rot = torch.zeros_like(self.franka_local_grasp_rot)
+
         print("Finished initialising data")
 
 
@@ -608,18 +609,23 @@ class FrankaCabinet(VecTask):
         dof_pos_scaled = (2.0 * (self.franka_dof_pos - self.franka_dof_lower_limits)
                           / (self.franka_dof_upper_limits - self.franka_dof_lower_limits) - 1.0)
         
+
         if self.using_camera:
-            self.gym.render_all_camera_sensors(self.sim)
-            self.gym.start_access_image_tensors(self.sim)
 
-            if self.img_save: self.save_images()
+            if self.global_timer == 1:
+                self.gym.render_all_camera_sensors(self.sim)
+                self.gym.start_access_image_tensors(self.sim)
 
-            img_tensor = torch.stack((self.cam_tensors), 0)  # combine images
-            img_tensor[img_tensor < -2] = 0 # remove faraway data
+                if self.img_save: self.save_images(True)
 
-            camera_data = torch.reshape(img_tensor, (self.num_envs, self.cam_pixels))
+                img_tensor = torch.stack((self.cam_tensors), 0)  # combine images
+                img_tensor[img_tensor < -2] = 0 # remove faraway data
+
+                camera_data = torch.reshape(img_tensor, (self.num_envs, self.cam_pixels))
+                self.gym.end_access_image_tensors(self.sim)
+
             self.obs_buf= torch.cat((camera_data, dof_pos_scaled, self.franka_dof_vel * self.dof_vel_scale, self.franka_grasp_pos[:, 2].unsqueeze(-1)), 1)
-            self.gym.end_access_image_tensors(self.sim)
+            
         else:
             to_target = self.prop_grasp_pos - self.franka_grasp_pos # Distance to target
             self.obs_buf = torch.cat((dof_pos_scaled[:,:8], self.franka_dof_vel[:,:7] * self.dof_vel_scale, to_target, self.prop_grasp_pos[:, 2].unsqueeze(-1)), dim=-1) #self.prop_dof_vel[:, 3].unsqueeze(-1))
@@ -774,10 +780,10 @@ class FrankaCabinet(VecTask):
         gripper_state = torch.where(gripper_action <= 0.0,-1.0,1.0)
 
 
-    def save_images(self):
+    def save_images(self, save_now):
         frame_no = self.gym.get_frame_count(self.sim)
         for i in range(self.num_envs):
-            if frame_no % 100 == 0:
+            if frame_no % 100 == 0 or save_now:
                 img_dir = "images"
                 if not os.path.exists(img_dir):
                     os.mkdir(img_dir)
