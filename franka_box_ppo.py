@@ -95,15 +95,15 @@ cfg_ppo["mini_batches"] = 2
 
 cfg_ppo["discount_factor"] = 0.99
 cfg_ppo["lambda"] = 0.99
-cfg_ppo["policy_learning_rate"] = 0.0005
-cfg_ppo["value_learning_rate"] = 0.0005
+cfg_ppo["policy_learning_rate"] = 0.0002
+cfg_ppo["value_learning_rate"] = 0.0002
 
 cfg_ppo["grad_norm_clip"] = 0.5
 cfg_ppo["ratio_clip"] = 0.2
 cfg_ppo["value_clip"] = 0.2
 cfg_ppo["clip_predicted_values"] = False
 
-cfg_ppo["entropy_loss_scale"] = 0.01
+cfg_ppo["entropy_loss_scale"] = 0.001
 cfg_ppo["value_loss_scale"] = 2.0
 
 cfg_ppo["kl_threshold"] = 0
@@ -120,7 +120,7 @@ agent = PPO(models=networks_ppo,
 
 
 # Configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 200000, "progress_interval": 500}
+cfg_trainer = {"timesteps": 300000, "progress_interval": 500}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
 # start training

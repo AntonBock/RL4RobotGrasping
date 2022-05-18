@@ -124,7 +124,10 @@ class FrankaCabinet(VecTask):
         self.franka_dof_vel = self.franka_dof_state[..., 1]
         self.prop_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:]
         self.prop_dof_pos = self.prop_dof_state[..., 0] 
-        self.prop_dof_vel = self.prop_dof_state[..., 1] 
+        self.prop_dof_vel = self.prop_dof_state[..., 1]
+        self.wall_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:]
+        self.wall_dof_pos = self.wall_dof_state[..., 0]
+        self.wall_dof_vel = self.wall_dof_state[..., 1]
 
         self.rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(self.num_envs, -1, 13)
         self.num_bodies = self.rigid_body_states.shape[1]
@@ -672,7 +675,7 @@ class FrankaCabinet(VecTask):
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
         
-
+        self.wall_dof_state[env_ids, :] = torch.zeros_like(self.wall_dof_state[env_ids])
 
         # reset props (Random)
         if self.randPos:
