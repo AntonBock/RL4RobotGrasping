@@ -398,7 +398,7 @@ class FrankaCabinet(VecTask):
                         roll = 0
                         pitch = 0
                         yaw = 0
-                        prop_state_pose.p.x = 0.5 
+                        prop_state_pose.p.x = 0.4 
                        
                         prop_state_pose.p.y = 0.0 
                         prop_state_pose.p.z = 0.026+0.014 
@@ -426,13 +426,21 @@ class FrankaCabinet(VecTask):
                         # choice of prop
 
                         wall_state_pose = gymapi.Transform()
-                        # wall_state_pose.p.x = prop_state_pose.p.x
-                        # wall_state_pose.p.y = prop_state_pose.p.y-0.10
-                        # wall_state_pose.p.z = prop_state_pose.p.z
+                        wall_state_pose.p.x = prop_state_pose.p.x+0.10
+                        wall_state_pose.p.y = prop_state_pose.p.y
+                        wall_state_pose.p.z = 0.04
 
-                        wall_state_pose.p.x = 1
-                        wall_state_pose.p.y = 1
-                        wall_state_pose.p.z = 1
+                        # wall_state_pose.p = gymapi.Vec3(0.5, 0.0, 0.04)
+
+                        yaw=1.57
+
+                        qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+                        qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+                        qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+                        qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+                        
+
+
                         wall_state_pose.r = gymapi.Quat(qx, qy, qz, qw)
 
 
@@ -481,6 +489,8 @@ class FrankaCabinet(VecTask):
                                                          0, 0, 0, 0, 0, 0])
 
                         # self.gym.set_actor_scale(env_ptr, prop_actor, 0.035) 
+
+                        print("Wall pos: ", wall_state_pose.p, wall_state_pose.r)
                                                           
             #Camera setup
             camera_prop = self.camera_prop_setup()
@@ -504,6 +514,7 @@ class FrankaCabinet(VecTask):
         self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
         #self.drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
         self.prop_handle = self.gym.find_actor_rigid_body_handle(env_ptr, prop_actor, "prop_box")
+        self.wall_handle = self.gym.find_actor_rigid_body_handle(env_ptr, wall_actor, "wall") 
 
         # self.gym.set_actor_scale(env_ptr, self.prop_handle, 5.2)
         # self.prop_handle = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
@@ -633,6 +644,8 @@ class FrankaCabinet(VecTask):
         prop_pos = self.rigid_body_states[:, self.prop_handle][:, 0:3]
         prop_rot = self.rigid_body_states[:, self.prop_handle][:, 3:7]
 
+        # print("Wall: ", self.wall_handle)
+
         self.franka_grasp_rot[:], self.franka_grasp_pos[:], self.prop_grasp_rot[:], self.prop_grasp_pos[:] = \
             compute_grasp_transforms(hand_rot, hand_pos, self.franka_local_grasp_rot, self.franka_local_grasp_pos,
                                      prop_rot, prop_pos, self.prop_local_grasp_rot, self.prop_local_grasp_pos
@@ -683,7 +696,7 @@ class FrankaCabinet(VecTask):
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
         
-        self.wall_dof_state[env_ids, :] = torch.zeros_like(self.wall_dof_state[env_ids])
+        # self.wall_dof_state[env_ids, :] = torch.zeros_like(self.wall_dof_state[env_ids])
 
         # reset props (Random)
         if self.randPos:
@@ -712,7 +725,7 @@ class FrankaCabinet(VecTask):
             
 
         if self.num_props > 0:
-            prop_indices = self.global_indices[env_ids, 1:].flatten()
+            prop_indices = self.global_indices[env_ids, 2:].flatten()
             self.prop_states[env_ids] = self.default_prop_states[env_ids]
             # print("Prop pos: ", self.default_prop_states[env_ids])
 
