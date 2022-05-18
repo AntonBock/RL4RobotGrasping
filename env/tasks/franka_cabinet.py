@@ -140,7 +140,7 @@ class FrankaCabinet(VecTask):
         self.num_dofs = self.gym.get_sim_dof_count(self.sim) // self.num_envs
         self.franka_dof_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
 
-        self.global_indices = torch.arange(self.num_envs * (1 + self.num_props), dtype=torch.int32, device=self.device).view(self.num_envs, -1)
+        self.global_indices = torch.arange(self.num_envs * (2 + self.num_props), dtype=torch.int32, device=self.device).view(self.num_envs, -1)
         # print("Finished __init__")
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
         # print("Finished __init__2")
@@ -586,7 +586,7 @@ class FrankaCabinet(VecTask):
         self.gym.refresh_net_contact_force_tensor(self.sim)
         _force_vec = self.gym.acquire_net_contact_force_tensor(self.sim)
         force_vec = gymtorch.wrap_tensor(_force_vec)
-        force_vec = force_vec.view(-1, 11, 3)
+        force_vec = force_vec.view(-1, 12, 3) #Changed from 11 to 12
         _force_vec_franka = force_vec[:, :10]
         _force_vec_left = force_vec.select(1, 8)
         _force_vec_right = force_vec.select(1, 9)
