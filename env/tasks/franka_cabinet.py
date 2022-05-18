@@ -229,6 +229,7 @@ class FrankaCabinet(VecTask):
 
         self.num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         self.num_franka_dofs = self.gym.get_asset_dof_count(franka_asset)
+        
 
 
         print("num franka bodies: ", self.num_franka_bodies)
@@ -262,6 +263,9 @@ class FrankaCabinet(VecTask):
         franka_start_pose.p = gymapi.Vec3(1.0, 0.0, 0.0)
         franka_start_pose.r = gymapi.Quat(0.0, 0.0, 1.0, 0.0)
 
+
+
+
         wall_asset_options = gymapi.AssetOptions()
         wall_asset_options.density = 10.0
         wall_asset_options.fix_base_link = True
@@ -271,6 +275,11 @@ class FrankaCabinet(VecTask):
         sphere_asset = self.gym.load_asset(self.sim, asset_root, sphere_asset_file)
         wall_asset = self.gym.load_asset(self.sim, asset_root, wall_asset_file, asset_options)
 
+        self.num_wall_dofs = self.gym.get_asset_dof_count(wall_asset)
+
+        wall_dof_props = self.gym.get_asset_dof_properties(wall_asset)
+        for i in range(self.num_wall_dofs):
+            wall_dof_props['damping'][i] = 10.0
 
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
@@ -429,7 +438,7 @@ class FrankaCabinet(VecTask):
 
                         
                         wall_actor = self.gym.create_actor(env_ptr, wall_asset, wall_state_pose, "wall", i, 2, 0)
-                        # self.gym.set_actor_dof_properties(env_ptr, wall_actor, wall_dof_props) may use
+                        self.gym.set_actor_dof_properties(env_ptr, wall_actor, wall_dof_props) # may use
 
 
 
