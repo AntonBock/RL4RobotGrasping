@@ -12,8 +12,8 @@ from skrl.trainers.torch import SequentialTrainer
 from skrl.envs.torch import wrap_env
 from skrl.envs.torch import load_isaacgym_env_preview2, load_isaacgym_env_preview3
 
-tt = False
-checkpoint = True
+tt = True
+checkpoint = False
 
 # Define the models (stochastic and deterministic models) for the agent using helper classes 
 # and programming with two approaches (layer by layer and torch.nn.Sequential class).

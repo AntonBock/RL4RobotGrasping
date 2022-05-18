@@ -638,8 +638,8 @@ class FrankaCabinet(VecTask):
         hand_rot = self.rigid_body_states[:, self.hand_handle][:, 3:7]
         prop_pos = self.rigid_body_states[:, self.prop_handle][:, 0:3]
         prop_rot = self.rigid_body_states[:, self.prop_handle][:, 3:7]
-        wall_pos = self.rigid_body_states[:, self.wall_handle][:, 0:3]
-        wall_rot = self.rigid_body_states[:, self.wall_handle][:, 3:7]
+        # wall_pos = self.rigid_body_states[:, self.wall_handle][:, 0:3]
+        # wall_rot = self.rigid_body_states[:, self.wall_handle][:, 3:7]
 
         self.franka_grasp_rot[:], self.franka_grasp_pos[:], self.prop_grasp_rot[:], self.prop_grasp_pos[:] = \
             compute_grasp_transforms(hand_rot, hand_pos, self.franka_local_grasp_rot, self.franka_local_grasp_pos,
