@@ -495,7 +495,6 @@ class FrankaCabinet(VecTask):
         self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
         #self.drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
         self.prop_handle = self.gym.find_actor_rigid_body_handle(env_ptr, prop_actor, "prop_box")
-        self.wall_handle = self.gym.find_actor_rigid_body_handle(env_ptr, wall_actor, "wall") # Unused?
 
         # self.gym.set_actor_scale(env_ptr, self.prop_handle, 5.2)
         # self.prop_handle = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
