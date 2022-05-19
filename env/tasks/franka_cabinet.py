@@ -580,8 +580,10 @@ class FrankaCabinet(VecTask):
             total_success = torch.sum(self.success_counter)
             total_failure = torch.sum(self.fail_counter)
             print(f"Total Success rate: {total_success}/{total_success+total_failure} = {total_success/(total_success+total_failure)}")
-            env_success = torch.div(self.success_counter, torch.add(self.success_counter, self.fail_counter))
+            #env_success = torch.div(self.success_counter, torch.add(self.success_counter, self.fail_counter))
             #print(env_success)
+            #print(f"Worst: {torch.min(env_success)}, idx: {torch.argmin(env_success)}")
+            #print(f"Best: {torch.max(env_success)}, idx: {torch.argmax(env_success)}")
 
 
     def compute_observations(self):
@@ -852,7 +854,7 @@ def compute_franka_reward(
     # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
     # dist_reward = torch.where(d <= 0.06, 10, 0)
 
-    dist_reward = 1.0 / (1.0 + d ** 2)
+    dist_reward = 1.0 / (1.0 + (d*10) ** 2)
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.06, dist_reward*2.0, dist_reward)
 

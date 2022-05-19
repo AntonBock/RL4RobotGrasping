@@ -16,7 +16,7 @@ tt = True
 checkpoint = False
 
 # Define the models (stochastic and deterministic models) for the agent using helper classes 
-# and programming with two approaches (layer by layer and torch.nn.Sequential class).
+# and programming with two approaches (layer by layer and torch.nn.Sequential class)
 # - Policy: takes as input the environment's observation/state and returns an action
 # - Value: takes the state as input and provides a value to guide the policy
 class Policy(GaussianModel):
@@ -95,15 +95,15 @@ cfg_ppo["mini_batches"] = 2
 
 cfg_ppo["discount_factor"] = 0.99
 cfg_ppo["lambda"] = 0.99
-cfg_ppo["policy_learning_rate"] = 0.0005
-cfg_ppo["value_learning_rate"] = 0.0005
+cfg_ppo["policy_learning_rate"] = 0.0002
+cfg_ppo["value_learning_rate"] = 0.0002
 
 cfg_ppo["grad_norm_clip"] = 0.5
 cfg_ppo["ratio_clip"] = 0.2
 cfg_ppo["value_clip"] = 0.2
 cfg_ppo["clip_predicted_values"] = False
 
-cfg_ppo["entropy_loss_scale"] = 0.01
+cfg_ppo["entropy_loss_scale"] = 0.005
 cfg_ppo["value_loss_scale"] = 2.0
 
 cfg_ppo["kl_threshold"] = 0
