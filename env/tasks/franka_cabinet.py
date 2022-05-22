@@ -398,7 +398,7 @@ class FrankaCabinet(VecTask):
                         roll = 0
                         pitch = 0
                         yaw = 0
-                        prop_state_pose.p.x = 0.4 
+                        prop_state_pose.p.x = 0.5
                        
                         prop_state_pose.p.y = 0.0 
                         prop_state_pose.p.z = 0.026+0.014 
@@ -902,11 +902,11 @@ def compute_franka_reward(
     # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
     # dist_reward = torch.where(d <= 0.06, 10, 0)
 
-    dist_reward = 1.0 / (1.0 + d ** 2)
+    dist_reward = 1.0 / (1.0 + (d*10) ** 2)
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.06, dist_reward*2.0, dist_reward)
 
-    grip_reward = torch.where(finger_dist>0.02, grip*50, 0)
+    grip_reward = torch.where(finger_dist>0.02, torch.where(d<0.05, grip*50, 0), 0)
 
     # height_reward = torch.where(prob_height>0.05, prob_height*prob_height*10000, 0.0)
     # height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
@@ -933,7 +933,7 @@ def compute_franka_reward(
     reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
     #Reward
-    rewards = dist_reward + grip_reward + height_reward + success_reward
+    rewards = dist_reward + grip_reward + height_reward + success_reward - collision*0.1
 
     return rewards, reset_buf, success_count, fail_count, success_time
 

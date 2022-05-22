@@ -21,7 +21,7 @@ env:
   randDynamics: False
   randTerrain: False
   randomPropPosition: False
-  propSelect: ${resolve_default:"box",${...prop_sel}} #box, randRock
+  propSelect: ${resolve_default:"randRock",${...prop_sel}} #box, randRock
   numProps: 1
   aggregateMode: 3
 
