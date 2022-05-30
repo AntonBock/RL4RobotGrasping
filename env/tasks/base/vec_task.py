@@ -400,16 +400,7 @@ class VecTask(Env):
 
             else:
                 self.gym.poll_viewer_events(self.viewer)
-        else:
-            # fetch results
-            if self.device != 'cpu':
-                self.gym.fetch_results(self.sim, True)
-
-            # step graphics
-            self.gym.step_graphics(self.sim)
-            # Wait for dt to elapse in real time.
-            # This synchronizes the physics simulation with the rendering rate.
-            self.gym.sync_frame_time(self.sim)
+    
 
     def __parse_sim_params(self, physics_engine: str, config_sim: Dict[str, Any]) -> gymapi.SimParams:
         """Parse the config dictionary for physics stepping settings.

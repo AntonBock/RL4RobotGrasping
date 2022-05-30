@@ -88,10 +88,10 @@ class FrankaCabinet(VecTask):
         self.prop_length = 0.05
         self.prop_spacing = 0.06
 
-        self.cam_width = 84
-        self.cam_height = 84
+        self.cam_width = 64
+        self.cam_height = 64
         self.cam_pixels = self.cam_width*self.cam_height
-        self.non_cam_observations = 19
+        self.non_cam_observations = 16
 
         self.cfg["env"]["numObservations"] = self.cam_pixels + self.non_cam_observations if self.using_camera else 19
         self.cfg["env"]["numActions"] = 8
@@ -113,6 +113,7 @@ class FrankaCabinet(VecTask):
         self.fail_counter = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
         self.success_timer = torch.zeros(self.num_envs, dtype=torch.int64, device=self.device)
         self.global_timer = 0
+        self.camera_data = torch.zeros(self.num_envs, self.cam_pixels, device=self.device)
 
         # create some wrapper tensors for different slices
 
@@ -391,9 +392,9 @@ class FrankaCabinet(VecTask):
                         # Use random positioning?
 
                         if self.randPos:
-                            prop_state_pose.p.x = randrange_float(0.40, 0.80, self.prop_spacing)
+                            prop_state_pose.p.x = randrange_float(0.50, 0.70, self.prop_spacing)
                             # propz, propy = 0, p
-                            prop_state_pose.p.y = randrange_float(-0.50, 0.50, self.prop_spacing)
+                            prop_state_pose.p.y = randrange_float(-0.20, 0.20, self.prop_spacing)
                             
                             yaw = random.uniform(0.00000, 6.28318)
             
@@ -450,7 +451,7 @@ class FrankaCabinet(VecTask):
             camera_prop = self.camera_prop_setup()
             camera_handle = self.gym.create_camera_sensor(env_ptr, camera_prop)
             self.cams.append(camera_handle)
-            self.gym.set_camera_location(camera_handle, env_ptr, gymapi.Vec3(0.2, 0.0, 1.0), gymapi.Vec3(0.6, 0.0, 0.0))
+            self.gym.set_camera_location(camera_handle, env_ptr, gymapi.Vec3(0.61, 0.0, 0.35), gymapi.Vec3(0.6, 0.0, 0.1))
 
             # wrap camera tensor in a pytorch tensor
             cam_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env_ptr, camera_handle, gymapi.IMAGE_DEPTH)
@@ -615,18 +616,23 @@ class FrankaCabinet(VecTask):
         if self.using_camera:
 
             if self.global_timer == 1:
+                self.gym.fetch_results(self.sim, True)
+                self.gym.step_graphics(self.sim)
                 self.gym.render_all_camera_sensors(self.sim)
                 self.gym.start_access_image_tensors(self.sim)
+                
 
                 if self.img_save: self.save_images(True)
 
                 img_tensor = torch.stack((self.cam_tensors), 0)  # combine images
-                img_tensor[img_tensor < -2] = 0 # remove faraway data
-
-                camera_data = torch.reshape(img_tensor, (self.num_envs, self.cam_pixels))
+                img_tensor = (img_tensor-torch.min(img_tensor))*100
+                img_tensor[img_tensor < 4] = 0 # remove faraway data
+                self.camera_data = torch.reshape(img_tensor, (self.num_envs, self.cam_pixels))
+                #torch.set_printoptions(profile="full")
+                #print(self.camera_data[1])
                 self.gym.end_access_image_tensors(self.sim)
 
-            self.obs_buf= torch.cat((camera_data, dof_pos_scaled, self.franka_dof_vel * self.dof_vel_scale, self.franka_grasp_pos[:, 2].unsqueeze(-1)), 1)
+            self.obs_buf= torch.cat((self.camera_data, dof_pos_scaled[:,:8], self.franka_dof_vel[:,:7] * self.dof_vel_scale, self.prop_grasp_pos[:, 2].unsqueeze(-1)), 1)
             
         else:
             to_target = self.prop_grasp_pos - self.franka_grasp_pos # Distance to target
@@ -651,7 +657,7 @@ class FrankaCabinet(VecTask):
 
 
         # reset props (Random)
-        if self.randPos:
+        if False: #self.randPos
 
             prop_state_pose = gymapi.Transform()
 
@@ -790,11 +796,12 @@ class FrankaCabinet(VecTask):
                 if not os.path.exists(img_dir):
                     os.mkdir(img_dir)
 
-                cam_img = self.cam_tensors[i].cpu().numpy()
-                cam_img[cam_img < -2] = 0
-                cam_img= cam_img*100
+                cam_img = self.cam_tensors[i]
+                cam_img = (cam_img-torch.min(cam_img))*100
+                cam_img[cam_img < 4] = 0 # remove faraway data
+                print(cam_img[1])
                 fname = os.path.join(img_dir, "cam-%04d-%04d.png" % (frame_no, i))
-                imageio.imwrite(fname, cam_img)
+                imageio.imwrite(fname, cam_img.cpu().numpy())
 
 
     def camera_prop_setup(self):
@@ -854,7 +861,7 @@ def compute_franka_reward(
     # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
     # dist_reward = torch.where(d <= 0.06, 10, 0)
 
-    dist_reward = 1.0 / (1.0 + (d*10) ** 2)
+    dist_reward = 1.0 / (1.0 + d ** 2)
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.06, dist_reward*2.0, dist_reward)
 
@@ -868,6 +875,7 @@ def compute_franka_reward(
     height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
     height_reward = torch.where(prob_height>0.30, 400-prob_height*1000, height_reward)
 
+    height_reward = torch.where(grip_reward>30.0, height_reward, 0.0)
     #reset on Succes
     success_time = torch.where(prob_height>0.10, torch.where(prob_height<0.30, success_time+1, 0), 0)
     success_count = torch.where(success_time>30, success_count+1, success_count)
@@ -876,7 +884,7 @@ def compute_franka_reward(
     end_reward = (max_episode_length-progress_buf)*200
     end_reward = end_reward.double()
     success_reward = torch.where(success_time>30, end_reward, 0.0)
-    
+    success_reward = torch.where(height_reward>10, end_reward, 0.0)
     #Reset on failure
     fail_count = torch.where(progress_buf >= max_episode_length - 1, fail_count+1, fail_count)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
@@ -885,7 +893,7 @@ def compute_franka_reward(
     reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
     #Reward
-    rewards = dist_reward + grip_reward + height_reward + success_reward
+    rewards = dist_reward + height_reward + success_reward + grip_reward 
 
     return rewards, reset_buf, success_count, fail_count, success_time
 

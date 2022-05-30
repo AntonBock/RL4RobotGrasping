@@ -93,12 +93,6 @@ class Cartpole(VecTask):
         self.dof_pos = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 0]
         self.dof_vel = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 1]
 
-        sizeLayer = layer_dim(8, 4, 84)
-        print(f"Size of layer: {sizeLayer}")
-        sizeLayer = layer_dim(4, 2, sizeLayer)
-        print(f"Size of layer: {sizeLayer}")
-        sizeLayer = layer_dim(3, 1, sizeLayer)
-        print(f"Size of layer: {sizeLayer}")
 
 
     def create_sim(self):
@@ -285,8 +279,3 @@ def compute_cartpole_reward(pole_angle, pole_vel, cart_vel, cart_pos,
     return reward, reset
 
 
-def layer_dim(kernel, stride, in_size):
-
-        size_conv = (((in_size-kernel))/stride)+1
-
-        return size_conv
