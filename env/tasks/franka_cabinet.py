@@ -567,7 +567,7 @@ class FrankaCabinet(VecTask):
         collision_tens = torch.where(torch.norm(_force_vec_franka, p=2, dim=-1) > 100, 0, 1)
         collision_tens = ~torch.all(collision_tens, 1)
 
-        self.rew_buf[:], self.reset_buf[:], self.success_counter[:], self.fail_counter[:], self.success_timer[:] = compute_franka_reward(
+        self.rew_buf[:], self.reset_buf[:], self.success_counter[:], self.fail_counter[:], self.success_timer[:], self.reward_state[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
             self.franka_grasp_pos, self.prop_grasp_pos, self.franka_grasp_rot, self.prop_grasp_rot,
             self.franka_lfinger_pos, self.franka_rfinger_pos,
@@ -834,7 +834,7 @@ def compute_franka_reward(
     num_envs, dist_reward_scale, rot_reward_scale, around_handle_reward_scale, height_reward_scale,
     finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length, grip, collision, reward_state, success_count, fail_count, success_time
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, int, float, float, float, float, float, float, float, float, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]
 
     # distance from hand to the drawer
     d = torch.norm(franka_grasp_pos - prop_grasp_pos, p=2, dim=-1)
@@ -848,14 +848,14 @@ def compute_franka_reward(
     finger_dist = torch.norm(franka_lfinger_pos - franka_rfinger_pos, p=2, dim=-1)
 
     #One time rewards
-    # reward = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, 0), 0)
-    # reward_state = torch.where(reward_state == 0, torch.where(d <= 0.40, 1, reward_state), reward_state)
+    reward = torch.where(reward_state == 0, torch.where(finger_dist>0.02, grip*100, 0), 0)
+    reward_state = torch.where(reward_state == 0, torch.where(finger_dist>0.02, torch.where(grip > 0.5, 1, reward_state), reward_state), reward_state)
     
-    # reward = torch.where(reward_state == 1, torch.where(d <= 0.1, 7, 0), 0)
-    # reward_state = torch.where(reward_state == 1, torch.where(d <= 0.1, 2, reward_state), reward_state)
+    reward = torch.where(reward_state == 1, torch.where(prob_height>0.05, 100, reward), reward)
+    reward_state = torch.where(reward_state == 1, torch.where(prob_height>0.05, 2, reward_state), reward_state)
 
-    # reward = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 49, 0), 0)
-    # reward_state = torch.where(reward_state == 2, torch.where(grip_forces > 0.5, 3, reward_state), reward_state)
+    reward = torch.where(reward_state == 2, torch.where(prob_height>0.10, 10000, reward), reward)
+    reward_state = torch.where(reward_state == 2, torch.where(prob_height>0.10, 3, reward_state), reward_state)
 
     #Continuous reward
     # close_reward = torch.where(d <= 0.3, 1.0, 0.0)
@@ -871,31 +871,34 @@ def compute_franka_reward(
     # height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
     # height_reward = torch.where(prob_height>0.20, 200.0-prob_height*1000, height_reward)
 
-    height_reward = torch.where(prob_height>0.05, prob_height*prob_height*10000, 0.0)
-    height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
-    height_reward = torch.where(prob_height>0.30, 400-prob_height*1000, height_reward)
+    # height_reward = torch.where(prob_height>0.05, prob_height*prob_height*10000, 0.0)
+    # height_reward = torch.where(prob_height>0.10, 100.0, height_reward)
+    # height_reward = torch.where(prob_height>0.30, 400-prob_height*1000, height_reward)
 
-    height_reward = torch.where(grip_reward>30.0, height_reward, 0.0)
+    # height_reward = torch.where(grip_reward>30.0, height_reward, 0.0)
     #reset on Succes
     success_time = torch.where(prob_height>0.10, torch.where(prob_height<0.30, success_time+1, 0), 0)
     success_count = torch.where(success_time>30, success_count+1, success_count)
-    reset_buf = torch.where(success_time>30, torch.ones_like(reset_buf), reset_buf)
+
+    #Reset on success
+    reset_buf = torch.where(prob_height>0.10, torch.ones_like(reset_buf), reset_buf)
+    #reset_buf = torch.where(success_time>30, torch.ones_like(reset_buf), reset_buf)
 
     end_reward = (max_episode_length-progress_buf)*200
     end_reward = end_reward.double()
-    success_reward = torch.where(success_time>30, end_reward, 0.0)
-    success_reward = torch.where(height_reward>10, end_reward, 0.0)
+    #success_reward = torch.where(success_time>30, end_reward, 0.0)
+    #success_reward = torch.where(height_reward>10, end_reward, 0.0)
     #Reset on failure
     fail_count = torch.where(progress_buf >= max_episode_length - 1, fail_count+1, fail_count)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
-
+    
     #reset if prop somehow falls down
     reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
     #Reward
-    rewards = dist_reward + height_reward + success_reward + grip_reward 
+    rewards = dist_reward + reward
 
-    return rewards, reset_buf, success_count, fail_count, success_time
+    return rewards, reset_buf, success_count, fail_count, success_time, reward_state
 
 
 
