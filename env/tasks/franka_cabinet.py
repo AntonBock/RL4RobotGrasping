@@ -403,7 +403,7 @@ class FrankaCabinet(VecTask):
                         prop_state_pose.p.x = 0.5 
                        
                         prop_state_pose.p.y = 0.0 
-                        prop_state_pose.p.z = 0.026+0.014+0.5
+                        prop_state_pose.p.z = 0.026+0.014
 
                         
 
@@ -927,7 +927,7 @@ def compute_franka_reward(
     reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
     #Reward
-    rewards = dist_reward #+ height_reward + success_reward + grip_reward 
+    rewards = dist_reward + height_reward + success_reward + grip_reward 
 
     return rewards, reset_buf, success_count, fail_count, success_time
 
