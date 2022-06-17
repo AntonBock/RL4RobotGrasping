@@ -64,70 +64,71 @@ env = wrap_env(env)
 
 device = env.device
 
-# Instantiate a RandomMemory as rollout buffer (any memory can be used for this)
-memory = RandomMemory(memory_size=16, num_envs=env.num_envs, device=device)
+for _ in range(7):
+    # Instantiate a RandomMemory as rollout buffer (any memory can be used for this)
+    memory = RandomMemory(memory_size=16, num_envs=env.num_envs, device=device)
 
-# Instantiate the agent's models (function approximators).
-# PPO requires 2 models, visit its documentation for more details
-# https://skrl.readthedocs.io/en/latest/modules/skrl.agents.ppo.html#models-networks
+    # Instantiate the agent's models (function approximators).
+    # PPO requires 2 models, visit its documentation for more details
+    # https://skrl.readthedocs.io/en/latest/modules/skrl.agents.ppo.html#models-networks
 
-networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
-            "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
+    networks_ppo = {"policy": Policy(env.observation_space, env.action_space, device, clip_actions=True),
+                "value": (Value(env.observation_space, env.action_space, device) if tt else None)}
 
-if checkpoint:
-    networks_ppo["policy"].load("./runs/policy.pt") 
-else:
-    # Initialize the models' parameters (weights and biases) using a Gaussian distribution
-    for network in networks_ppo.values():
-        network.init_parameters(method_name="normal_", mean=0.0, std=0.1) 
+    if checkpoint:
+        networks_ppo["policy"].load("./runs/policy.pt") 
+    else:
+        # Initialize the models' parameters (weights and biases) using a Gaussian distribution
+        for network in networks_ppo.values():
+            network.init_parameters(method_name="normal_", mean=0.0, std=0.1) 
 
-         
+            
 
-# Configure and instantiate the agent.
-# Only modify some of the default configuration, visit its documentation to see all the options
-# https://skrl.readthedocs.io/en/latest/modules/skrl.agents.ppo.html#configuration-and-hyperparameters
-cfg_ppo = PPO_DEFAULT_CONFIG.copy()
-cfg_ppo["learning_starts"] = 0
-cfg_ppo["random_timesteps"] = 0
-cfg_ppo["rollouts"] = 16
-cfg_ppo["learning_epochs"] = 8
-cfg_ppo["mini_batches"] = 2
+    # Configure and instantiate the agent.
+    # Only modify some of the default configuration, visit its documentation to see all the options
+    # https://skrl.readthedocs.io/en/latest/modules/skrl.agents.ppo.html#configuration-and-hyperparameters
+    cfg_ppo = PPO_DEFAULT_CONFIG.copy()
+    cfg_ppo["learning_starts"] = 0
+    cfg_ppo["random_timesteps"] = 0
+    cfg_ppo["rollouts"] = 16
+    cfg_ppo["learning_epochs"] = 8
+    cfg_ppo["mini_batches"] = 2
 
-cfg_ppo["discount_factor"] = 0.99
-cfg_ppo["lambda"] = 0.99
-cfg_ppo["policy_learning_rate"] = 0.0005
-cfg_ppo["value_learning_rate"] = 0.0005
+    cfg_ppo["discount_factor"] = 0.99
+    cfg_ppo["lambda"] = 0.99
+    cfg_ppo["policy_learning_rate"] = 0.0005
+    cfg_ppo["value_learning_rate"] = 0.0005
 
-cfg_ppo["grad_norm_clip"] = 0.5
-cfg_ppo["ratio_clip"] = 0.2
-cfg_ppo["value_clip"] = 0.2
-cfg_ppo["clip_predicted_values"] = False
+    cfg_ppo["grad_norm_clip"] = 0.5
+    cfg_ppo["ratio_clip"] = 0.2
+    cfg_ppo["value_clip"] = 0.2
+    cfg_ppo["clip_predicted_values"] = False
 
-cfg_ppo["entropy_loss_scale"] = 0.001
-cfg_ppo["value_loss_scale"] = 2.0
+    cfg_ppo["entropy_loss_scale"] = 0.001
+    cfg_ppo["value_loss_scale"] = 2.0
 
-cfg_ppo["kl_threshold"] = 0
-# logging to TensorBoard and write checkpoints each 16 and 1000 timesteps respectively
-cfg_ppo["experiment"]["write_interval"] = 50
-cfg_ppo["experiment"]["checkpoint_interval"] = 1000
+    cfg_ppo["kl_threshold"] = 0
+    # logging to TensorBoard and write checkpoints each 16 and 1000 timesteps respectively
+    cfg_ppo["experiment"]["write_interval"] = 50
+    cfg_ppo["experiment"]["checkpoint_interval"] = 1000
 
-agent = PPO(models=networks_ppo,
-            memory=(memory if tt else None), 
-            cfg=cfg_ppo, 
-            observation_space=env.observation_space, 
-            action_space=env.action_space,
-            device=device)
+    agent = PPO(models=networks_ppo,
+                memory=(memory if tt else None), 
+                cfg=cfg_ppo, 
+                observation_space=env.observation_space, 
+                action_space=env.action_space,
+                device=device)
 
 
-# Configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 300000, "progress_interval": 500}
-trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
+    # Configure and instantiate the RL trainer
+    cfg_trainer = {"timesteps": 300000, "progress_interval": 500}
+    trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
-# start training
+    # start training
 
-if tt:
-    trainer.train()
-else:
-    trainer.eval()
+    if tt:
+        trainer.train()
+    else:
+        trainer.eval()
 
 

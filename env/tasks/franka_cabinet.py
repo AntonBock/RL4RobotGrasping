@@ -88,6 +88,10 @@ class FrankaCabinet(VecTask):
         self.prop_length = 0.05
         self.prop_spacing = 0.06
 
+        #Gravel
+        self.num_gravel = 20
+
+        #camera
         self.cam_width = 64
         self.cam_height = 64
         self.cam_pixels = self.cam_width*self.cam_height
@@ -125,7 +129,7 @@ class FrankaCabinet(VecTask):
         self.franka_dof_vel = self.franka_dof_state[..., 1]
         self.prop_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:]
         self.prop_dof_pos = self.prop_dof_state[..., 0] 
-        self.prop_dof_vel = self.prop_dof_state[..., 1] 
+        self.prop_dof_vel = self.prop_dof_state[..., 1]
 
         self.rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(self.num_envs, -1, 13)
         self.num_bodies = self.rigid_body_states.shape[1]
@@ -138,7 +142,7 @@ class FrankaCabinet(VecTask):
         self.num_dofs = self.gym.get_sim_dof_count(self.sim) // self.num_envs
         self.franka_dof_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
 
-        self.global_indices = torch.arange(self.num_envs * (1 + self.num_props), dtype=torch.int32, device=self.device).view(self.num_envs, -1)
+        self.global_indices = torch.arange(self.num_envs * (2 + self.num_props + self.num_gravel), dtype=torch.int32, device=self.device).view(self.num_envs, -1)
         # print("Finished __init__")
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
         # print("Finished __init__2")
@@ -178,6 +182,8 @@ class FrankaCabinet(VecTask):
         box_asset_file = "urdf/cube/cube.urdf"
         cyl_asset_file = "urdf/cylinder/cylinder.urdf"
         sphere_asset_file = "urdf/sphere/sphere.urdf"
+        bin_asset_file = "urdf/tray/traybox.urdf"
+        gravel_asset_file = "rocks/gravel.urdf"
         # rock_asset_file = "urdf/rock2/rock2.urdf"
         # sphere_asset_file = "urdf/donut_1/donut.urdf"
 
@@ -213,9 +219,6 @@ class FrankaCabinet(VecTask):
             cyl_asset_file = self.cfg["env"]["asset"].get("assetFileNameCyl", cyl_asset_file)
             sphere_asset_file = self.cfg["env"]["asset"].get("assetFileNameSphere", sphere_asset_file)
             # rock_asset_file = self.cfg["env"]["asset"].get("assetFileNameRock", rock_asset_file)
-
-
-
 
 
         franka_asset = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
@@ -259,20 +262,24 @@ class FrankaCabinet(VecTask):
         franka_start_pose.p = gymapi.Vec3(1.0, 0.0, 0.0)
         franka_start_pose.r = gymapi.Quat(0.0, 0.0, 1.0, 0.0)
 
+        bin_asset_options = gymapi.AssetOptions()
+        bin_asset_options.density = 10.0
+        bin_asset_options.fix_base_link = True
 
         box_asset = self.gym.load_asset(self.sim, asset_root, box_asset_file)
         cyl_asset = self.gym.load_asset(self.sim, asset_root, cyl_asset_file)
         sphere_asset = self.gym.load_asset(self.sim, asset_root, sphere_asset_file)
         # rock_asset = self.gym.load_asset(self.sim, asset_root, rock_asset_file)
-
+        bin_asset = self.gym.load_asset(self.sim, asset_root, bin_asset_file, bin_asset_options)
+        gravel_asset = self.gym.load_asset(self.sim, asset_root, gravel_asset_file)
 
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
         num_prop_bodies = 1 #self.gym.get_asset_rigid_body_count(prop_asset)
         num_prop_shapes = 1 #self.gym.get_asset_rigid_shape_count(prop_asset)
-        max_agg_bodies = num_franka_bodies + self.num_props * num_prop_bodies 
-        max_agg_shapes = num_franka_shapes + self.num_props * num_prop_shapes 
+        max_agg_bodies = num_franka_bodies + self.num_props + 1 + self.num_gravel #* num_prop_bodies 
+        max_agg_shapes = num_franka_shapes + self.num_props + 1 + self.num_gravel #* num_prop_shapes 
 
         self.frankas = []
         self.default_prop_states = []
@@ -280,6 +287,7 @@ class FrankaCabinet(VecTask):
         self.envs = []
         self.cams = []
         self.cam_tensors = []
+        self.tray_handles = []
         
         print("Iterating through environments")
         tx = -spacing
@@ -297,7 +305,8 @@ class FrankaCabinet(VecTask):
                 self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
             franka_actor = self.gym.create_actor(env_ptr, franka_asset, franka_start_pose, "franka", i, 1, 0)
-
+            
+            
 
             if self.randDynamics:
                 randDyn = randrange_float(0.99, 1.01, 0.00001)
@@ -319,6 +328,14 @@ class FrankaCabinet(VecTask):
             if self.aggregate_mode == 1:
                 self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
+
+            #Bin
+            bin_pose = gymapi.Transform()
+            bin_pose.p.x = 0.5
+            bin_pose.p.y = 0.0
+            bin_pose.p.z = 0.0
+
+            self.gym.create_actor(env_ptr, bin_asset, bin_pose, "bin", i, 2, 0)  
 
             #print("env_ptr: ", env_ptr)
 
@@ -386,8 +403,9 @@ class FrankaCabinet(VecTask):
                         prop_state_pose.p.x = 0.5 
                        
                         prop_state_pose.p.y = 0.0 
-                        prop_state_pose.p.z = 0.026+0.014 
+                        prop_state_pose.p.z = 0.026+0.014+0.5
 
+                        
 
                         # Use random positioning?
 
@@ -412,7 +430,20 @@ class FrankaCabinet(VecTask):
                         if xount > len(self.rockList)-1:
                             xount=0
                         
+                        #Gravel
+                        gravel_pose = gymapi.Transform()
                         
+
+                        for l in range(self.num_gravel):
+                            gravel_pose.p.x = randrange_float(0.30, 0.70, 0.02)
+                            gravel_pose.p.y = randrange_float(-0.20, 0.20, 0.02)
+                            gravel_pose.p.z = randrange_float(0.0, 0.15, 0.02)
+                            self.gym.create_actor(env_ptr, gravel_asset, gravel_pose, "gravel", i, 0, 0)
+                            self.default_prop_states.append([gravel_pose.p.x , gravel_pose.p.y, gravel_pose.p.z,
+                                                         gravel_pose.r.x, gravel_pose.r.y, gravel_pose.r.z, gravel_pose.r.w,
+                                                         0, 0, 0, 0, 0, 0])  
+                        
+
                         if self.randProp == "box":
                             prop_actor = self.gym.create_actor(env_ptr, box_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
                         elif self.randProp == "cyl":
@@ -446,7 +477,9 @@ class FrankaCabinet(VecTask):
                                                          0, 0, 0, 0, 0, 0])
 
                         # self.gym.set_actor_scale(env_ptr, prop_actor, 0.035) 
-                                                          
+
+            
+
             #Camera setup
             camera_prop = self.camera_prop_setup()
             camera_handle = self.gym.create_camera_sensor(env_ptr, camera_prop)
@@ -469,11 +502,12 @@ class FrankaCabinet(VecTask):
         self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
         #self.drawer_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cabinet_actor, "drawer_top")
         self.prop_handle = self.gym.find_actor_rigid_body_handle(env_ptr, prop_actor, "prop_box")
+
         # self.gym.set_actor_scale(env_ptr, self.prop_handle, 5.2)
         # self.prop_handle = self.gym.create_actor(env_ptr, prop_asset, prop_state_pose, "prop{}".format(prop_count), i, 0, 0)
         self.lfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_leftfinger")
         self.rfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_rightfinger")
-        self.default_prop_states = to_torch(self.default_prop_states, device=self.device, dtype=torch.float).view(self.num_envs, self.num_props, 13)
+        self.default_prop_states = to_torch(self.default_prop_states, device=self.device, dtype=torch.float).view(self.num_envs, self.num_props+self.num_gravel, 13)
         print("Finished creating environments")
         
         self.init_data()
@@ -549,7 +583,7 @@ class FrankaCabinet(VecTask):
         #print("Compute reward")
         self.gym.refresh_net_contact_force_tensor(self.sim)
         _force_vec = self.gym.acquire_net_contact_force_tensor(self.sim)
-        force_vec = gymtorch.wrap_tensor(_force_vec)
+        force_vec = gymtorch.wrap_tensor(_force_vec)[:self.num_envs*11, :]
         force_vec = force_vec.view(-1, 11, 3)
         _force_vec_franka = force_vec[:, :10]
         _force_vec_left = force_vec.select(1, 8)
@@ -683,8 +717,8 @@ class FrankaCabinet(VecTask):
             
 
         if self.num_props > 0:
-            prop_indices = self.global_indices[env_ids, 1:].flatten()
-            self.prop_states[env_ids] = self.default_prop_states[env_ids]
+            prop_indices = self.global_indices[env_ids, 2:].flatten()
+            self.prop_states[env_ids, 1:, :] = self.default_prop_states[env_ids]
             # print("Prop pos: ", self.default_prop_states[env_ids])
 
             self.gym.set_actor_root_state_tensor_indexed(self.sim,
@@ -893,7 +927,7 @@ def compute_franka_reward(
     reset_buf = torch.where(prop_grasp_pos[:, 2]<-0.3, torch.ones_like(reset_buf), reset_buf)
 
     #Reward
-    rewards = dist_reward + height_reward + success_reward + grip_reward 
+    rewards = dist_reward #+ height_reward + success_reward + grip_reward 
 
     return rewards, reset_buf, success_count, fail_count, success_time
 
