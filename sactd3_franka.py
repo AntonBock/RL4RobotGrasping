@@ -118,9 +118,11 @@ cfg_td3["exploration"]["noise"] = GaussianNoise(0, 0.2, device=device)
 cfg_td3["smooth_regularization_noise"] = GaussianNoise(0, 0.1, device=device)
 cfg_td3["smooth_regularization_clip"] = 0.1
 cfg_td3["gradient_steps"] = 1
-cfg_td3["batch_size"] = 512
+cfg_td3["batch_size"] = 2024
 cfg_td3["random_timesteps"] = 0
 cfg_td3["learning_starts"] = 0
+cfg_td3["actor_learning_rate"] = 1e-4
+cfg_td3["critic_learning_rate"] = 1e-4
 # logging to TensorBoard and write checkpoints each 25 and 1000 timesteps respectively
 cfg_td3["experiment"]["write_interval"] = 25
 cfg_td3["experiment"]["checkpoint_interval"] = 1000
@@ -151,8 +153,8 @@ agent_sac = SAC(models=models_sac,
 
 
 # Configure and instantiate the RL trainer
-cfg = {"timesteps": 200000, "progress_interval": 500}
-trainer = SequentialTrainer(cfg=cfg, env=env, agents=agent_sac)
+cfg = {"timesteps": 500000, "progress_interval": 500}
+trainer = SequentialTrainer(cfg=cfg, env=env, agents=agent_td3)
 
 # start training
 trainer.train()
