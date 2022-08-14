@@ -1,8 +1,7 @@
 # RL4RobotGrasping
 
 # Demo directory
-Find media files [here](https://drive.google.com/drive/folders/1iZSdf_ES50ebloyL4NZgCL3jxnOBp3L2?usp=sharing).
-
+Videos of behaviours observed during expermientation can be found  [here](https://youtube.com/playlist?list=PL_XDWFFeSG65TbA4NVZtjQiRzGxY6II8H) and [here](https://youtube.com/playlist?list=PL_XDWFFeSG64J5xg5qC1TZ2WcXuJs7pJi)
 
 # Install
 
